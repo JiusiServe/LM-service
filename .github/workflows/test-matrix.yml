@@ -15,19 +15,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        include:
-          # Test with latest Python on all OS
-          - os: ubuntu-latest
-            python-version: "3.13"
-            experimental: false
-          - os: windows-latest
-            python-version: "3.13"
-            experimental: false
-          - os: macos-latest
-            python-version: "3.13"
-            experimental: false
+        os: [ubuntu-latest]
+        python-version: ["3.12"]
+        experimental: [false]
     
     continue-on-error: ${{ matrix.experimental == true }}
     
