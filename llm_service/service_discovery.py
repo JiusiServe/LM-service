@@ -134,7 +134,7 @@ class HealthCheckServiceDiscovery(ServiceDiscovery):
                     "Instance %s %s marked as unhealthy.", self.server_type, iid
                 )
             elif (
-                self._instances[iid] is False
+                not self._instances[iid]
                 and self._succ_count.get(iid, 0) >= self._health_threshold
             ):
                 self._instances[iid] = True
@@ -142,12 +142,9 @@ class HealthCheckServiceDiscovery(ServiceDiscovery):
                     "Instance %s %s marked as healthy.", self.server_type, iid
                 )
 
-            tmp_health_instances = [
-                iid for iid, healthy in self._instances.items() if healthy
-            ]
-            tmp_unhealthy_instances = [
-                iid for iid, healthy in self._instances.items() if not healthy
-            ]
-
-            self._cached_health_instances = tmp_health_instances
-            self._cached_unhealth_instances = tmp_unhealthy_instances
+        self._cached_health_instances = [
+            iid for iid, healthy in self._instances.items() if healthy
+        ]
+        self._cached_unhealth_instances = [
+            iid for iid, healthy in self._instances.items() if not healthy
+        ]

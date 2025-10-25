@@ -3,7 +3,7 @@
 
 import random
 
-from request_stats import RequestStats
+from llm_service.request_stats import RequestStats
 
 
 class RoutingInterface:
@@ -43,20 +43,13 @@ class RoundRobinRouter(RoutingInterface):
         return endpoints[selected_index]
 
 
-class LatestInFlightRouter(RoutingInterface):
+class LeastInFlightRouter(RoutingInterface):
     def route_request(self, endpoints: list[int], request_stats: dict) -> int:
         if not endpoints:
             raise RuntimeError("No healthy endpoints available for routing.")
-        selected_instance = endpoints[0]
-        min_in_flight = float("inf")
 
-        for endpoint in endpoints:
-            stats: RequestStats | None = request_stats.get(endpoint)
-            if stats is None:
-                selected_instance = endpoint
-                min_in_flight = 0
-            elif stats and len(stats.in_flight_requests) < min_in_flight:
-                min_in_flight = len(stats.in_flight_requests)
-                selected_instance = endpoint
+        def get_in_flight_count(endpoint_id: int) -> int:
+            stats: RequestStats | None = request_stats.get(endpoint_id)
+            return len(stats.in_flight_requests) if stats else 0
 
-        return selected_instance
+        return min(endpoints, key=get_in_flight_count)

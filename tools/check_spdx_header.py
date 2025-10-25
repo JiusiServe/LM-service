@@ -84,6 +84,7 @@ def insert_header(path: Path, status: SPDXStatus) -> None:
                 new_lines.append(line)
                 if status == SPDXStatus.MISSING_COPYRIGHT:
                     new_lines.append(COPYRIGHT_LINE)
+                    inserted_copyright = True
                 continue
             if stripped == COPYRIGHT_LINE:
                 inserted_copyright = True

@@ -24,7 +24,7 @@ from llm_service.protocol.protocol import (
     ResponseType,
     ServerType,
 )
-from request_stats import RequestStatsMonitor
+from llm_service.request_stats import RequestStatsMonitor
 from llm_service.routing_logic import RandomRouter, RoutingInterface
 from llm_service.service_discovery import HealthCheckServiceDiscovery
 from vllm.engine.protocol import EngineClient
@@ -482,10 +482,7 @@ class Proxy(EngineClient):
 
         except Exception as e:
             raise RuntimeError(
-                "Health check failed for %s %s, exception: %s",
-                server_type,
-                id,
-                e,
+                f"Health check failed for {server_type} {id}, exception: {e}"
             ) from e
         finally:
             self.queues.pop(request_id, None)
