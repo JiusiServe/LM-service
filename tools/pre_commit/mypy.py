@@ -58,9 +58,10 @@ def run_mypy(ci_mode: bool, python_version: str, targets: list[str]) -> int:
         args += ["--follow-imports", "silent"]
     else:
         args += ["--follow-imports", "skip"]
-        config_path = Path(__file__).with_name("mypy_local.ini")
-        if config_path.exists():
-            args += ["--config-file", str(config_path)]
+
+    config_path = Path(__file__).with_name("mypy_local.ini")
+    if config_path.exists():
+        args += ["--config-file", str(config_path)]
 
     print("$", " ".join(args + targets))
     return subprocess.run(args + targets, check=False).returncode
