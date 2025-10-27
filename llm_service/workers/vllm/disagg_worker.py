@@ -18,7 +18,6 @@ from llm_service.protocol.protocol import (
     HeartbeatRequest,
     HeartbeatResponse,
     ProfileRequest,
-    ProfileResponse,
     RequestType,
     ResponseType,
 )
@@ -128,11 +127,13 @@ class DisaggWorker:
             await self.engine.start_profile()
             logger.info("Profiling started for request %s", req.request_id)
         except Exception as e:
-            logger.exception("Failed to start profiling for request %s", req.request_id)
+            logger.exception(
+                "Failed to start profiling for request %s", req.request_id
+            )
             # Send failure response back to proxy
             failure_resp = FailureResponse(
-                request_id=req.request_id, 
-                error_message=f"Failed to start profiling: {str(e)}"
+                request_id=req.request_id,
+                error_message=f"Failed to start profiling: {str(e)}",
             )
             response_bytes = self.encoder.encode(failure_resp)
             msg = (ResponseType.FAILURE, response_bytes)
@@ -144,11 +145,13 @@ class DisaggWorker:
             await self.engine.stop_profile()
             logger.info("Profiling stopped for request %s", req.request_id)
         except Exception as e:
-            logger.exception("Failed to stop profiling for request %s", req.request_id)
+            logger.exception(
+                "Failed to stop profiling for request %s", req.request_id
+            )
             # Send failure response back to proxy
             failure_resp = FailureResponse(
                 request_id=req.request_id,
-                error_message=f"Failed to stop profiling: {str(e)}"
+                error_message=f"Failed to stop profiling: {str(e)}",
             )
             response_bytes = self.encoder.encode(failure_resp)
             msg = (ResponseType.FAILURE, response_bytes)

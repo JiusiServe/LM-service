@@ -21,7 +21,6 @@ from llm_service.protocol.protocol import (
     HeartbeatRequest,
     HeartbeatResponse,
     ProfileRequest,
-    ProfileResponse,
     RequestType,
     ResponseType,
     ServerType,
@@ -499,15 +498,15 @@ class Proxy(EngineClient):
             raise RuntimeError(
                 "No PD workers configured: pd_addr_list is empty."
             )
-        
+
         # Send START_PROFILE request to all PD workers
         request_id = uuid.uuid4().hex
         request = ProfileRequest(request_id=request_id)
-        
+
         try:
             payload = self.encoder.encode(request)
             msg = (RequestType.START_PROFILE, payload)
-            
+
             # Send to all PD workers
             for socket in self.to_pd_sockets:
                 await socket.send_multipart(msg, copy=False)
@@ -520,15 +519,15 @@ class Proxy(EngineClient):
             raise RuntimeError(
                 "No PD workers configured: pd_addr_list is empty."
             )
-        
+
         # Send STOP_PROFILE request to all PD workers
         request_id = uuid.uuid4().hex
         request = ProfileRequest(request_id=request_id)
-        
+
         try:
             payload = self.encoder.encode(request)
             msg = (RequestType.STOP_PROFILE, payload)
-            
+
             # Send to all PD workers
             for socket in self.to_pd_sockets:
                 await socket.send_multipart(msg, copy=False)
