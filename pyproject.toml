@@ -31,7 +31,8 @@ develop = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["llm_service"]
+where = ["."]
+include = ["llm_service*"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

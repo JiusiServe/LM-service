@@ -10,12 +10,18 @@ from vllm.entrypoints.openai.api_server import build_async_engine_client
 from vllm.logger import init_logger
 from vllm.utils import FlexibleArgumentParser
 from vllm.version import __version__ as VLLM_VERSION
+import signal
 
 logger = init_logger(__name__)
 
 
 async def run(args, engine: EngineClient):
     logger.info("Initializing disaggregated worker")
+
+    def signal_handler(*_):
+        raise SystemExit()
+
+    signal.signal(signal.SIGTERM, signal_handler)
 
     worker = DisaggWorker(
         engine=engine,
