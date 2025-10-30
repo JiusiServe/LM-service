@@ -13,7 +13,7 @@ import numpy as np
 import zmq
 import zmq.asyncio
 
-from vllm.config import ModelConfig, VllmConfig
+from vllm.config import ModelConfig
 from llm_service.protocol.protocol import (
     FailureResponse,
     GenerationRequest,
@@ -36,12 +36,10 @@ from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.outputs import CompletionOutput, PoolingRequestOutput, RequestOutput
 from vllm.pooling_params import PoolingParams
-from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sampling_params import SamplingParams
 from vllm.transformers_utils.tokenizer import AnyTokenizer
 from vllm.transformers_utils.tokenizer_group import TokenizerGroup
 from vllm.utils import Device
-from vllm.v1.outputs import SamplerOutput
 
 TIMECOUNT_ENABLED = os.getenv("TIMECOUNT_ENABLED",
                               "0") in ("1", "true", "True")
@@ -306,9 +304,7 @@ class Proxy(EngineClient):
         request_id: Optional[str] = None,
         lora_request: Optional[LoRARequest] = None,
         trace_headers: Optional[Mapping[str, str]] = None,
-        prompt_adapter_request: Optional[PromptAdapterRequest] = None,
         priority: int = 0,
-        data_parallel_rank: Optional[int] = None,
     ):
         # lazy initialization
         if self.output_handler is None:
