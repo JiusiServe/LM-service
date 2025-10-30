@@ -180,10 +180,11 @@ class MetricsServiceDiscovery():
             "Avg prefill time requests: %.3f ms, "
             "Avg mean time per output token requests: %.3f ms, "
             "Avg time to first token: %.3f ms, "
-            "Avg proxy to encoder requests: %.3f ms, " \
-                if self.server_type== ServerType.E_INSTANCE else \
-                    "Avg proxy to pd requests: %.3f ms, "
         )
+        if self.server_type == ServerType.E_INSTANCE:
+            log_msg += "Avg proxy to encoder requests: %.3f ms, "
+        else:
+            log_msg += "Avg proxy to pd requests: %.3f ms, "
         for iid, result in zip(self._instances.keys(), results):
             if isinstance(result, dict):
 
@@ -196,8 +197,8 @@ class MetricsServiceDiscovery():
                     result.get("mean_time_per_output_token_requests", 0.0),
                     result.get("time_to_first_token", 0.0),
                     result.get("proxy_to_encode_time_avg", 0.0) \
-                        if self.server_type== ServerType.E_INSTANCE else \
-                        result.get("proxy_to_pd_time_avg", 0.0)
+                        if self.server_type== ServerType.E_INSTANCE \
+                            else result.get("proxy_to_pd_time_avg", 0.0)
                 )
 
                 metrics[iid] = msg
