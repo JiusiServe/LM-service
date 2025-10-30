@@ -38,7 +38,6 @@ from vllm.outputs import CompletionOutput, PoolingRequestOutput, RequestOutput
 from vllm.pooling_params import PoolingParams
 from vllm.sampling_params import SamplingParams
 from vllm.transformers_utils.tokenizer import AnyTokenizer
-from vllm.transformers_utils.tokenizer_group import TokenizerGroup
 from vllm.utils import Device
 
 TIMECOUNT_ENABLED = os.getenv("TIMECOUNT_ENABLED",
@@ -132,22 +131,6 @@ class Proxy(EngineClient):
             dtype="auto",
             task="generate",
             seed=42,
-        )
-
-        # Dummy: needed for EngineClient Protocol.
-        # TODO: refactor OAI Server to avoid needing this.
-        self.tokenizer = TokenizerGroup(
-            **dict(
-                tokenizer_id=self.model_config.tokenizer,
-                enable_lora=False,
-                max_num_seqs=1024,
-                max_loras=0,
-                max_input_length=None,
-                tokenizer_mode=self.model_config.tokenizer_mode,
-                trust_remote_code=self.model_config.trust_remote_code,
-                revision=self.model_config.tokenizer_revision,
-                truncation_side=self.model_config.truncation_side,
-            )
         )
 
         self.proxy_to_pd_time_start: dict[str, float] = {}
@@ -483,13 +466,8 @@ class Proxy(EngineClient):
     async def get_input_preprocessor(self) -> InputPreprocessor:
         raise NotImplementedError
 
-    async def get_tokenizer(
-        self,
-        lora_request: Optional[LoRARequest] = None,
-    ) -> AnyTokenizer:
-        if lora_request is not None:
-            raise NotImplementedError("LoRA is not yet supported.")
-        return self.tokenizer.get_lora_tokenizer(None)
+    async def get_tokenizer(self) -> AnyTokenizer:
+        raise NotImplementedError
 
     async def is_tracing_enabled(self) -> bool:
         return False
