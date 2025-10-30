@@ -68,19 +68,18 @@ class DisaggWorker:
         if os.path.exists(socket_path):
             os.remove(socket_path)
 
-    async def _do_log_stats(self) -> None:
-        while True:
-            # log engine stats(logger stats and EPD stats (if enabled))
-            await self.engine.do_log_stats()
-            await asyncio.sleep(envs.VLLM_LOG_STATS_INTERVAL)
-
     async def run_busy_loop(self):
         logger.info("DisaggWorker is ready To handle requests.")
 
         poller = zmq.asyncio.Poller()
         poller.register(self.from_proxy, zmq.POLLIN)
         if TIMECOUNT_ENABLED:
-            task = asyncio.create_task(self._do_log_stats())
+            # log engine stats(logger stats and EPD stats (if enabled))
+            async def _force_log():
+                while True:
+                    await asyncio.sleep(envs.VLLM_LOG_STATS_INTERVAL)
+                    await self.engine.do_log_stats()
+            task = asyncio.create_task(_force_log())
             self.running_requests.add(task)
             task.add_done_callback(self.running_requests.discard)
         while True:
