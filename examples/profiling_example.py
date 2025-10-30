@@ -53,11 +53,17 @@ async def main():
     parser.add_argument("--model-name", required=True, help="Model name")
     args = parser.parse_args()
 
-    # Ensure profiling directory is set
+    # Ensure profiling directory is set and created
     if "VLLM_TORCH_PROFILER_DIR" not in os.environ:
         profile_dir = "./vllm_profile"
         os.environ["VLLM_TORCH_PROFILER_DIR"] = profile_dir
         print(f"Setting VLLM_TORCH_PROFILER_DIR to {profile_dir}")
+    else:
+        profile_dir = os.environ["VLLM_TORCH_PROFILER_DIR"]
+
+    # Create the profiling directory if it doesn't exist
+    os.makedirs(profile_dir, exist_ok=True)
+    print(f"Profiling directory: {profile_dir}")
 
     # Initialize the proxy
     proxy = Proxy(
