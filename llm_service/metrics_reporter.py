@@ -72,6 +72,6 @@ class MetricsReporter:
                     if isinstance(result, asyncio.TimeoutError)
                     else result,
                 )
-        logger.info("Metrics for %s instances:" % self.server_type)
+        logger.info(f"Metrics for {self.server_type} instances:")
         for iid, metric in metrics.items():
             logger.info(metric)
