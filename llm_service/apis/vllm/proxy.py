@@ -421,7 +421,8 @@ class Proxy(EngineClient):
 
                 # Decode response according to its type.
                 resp: Union[
-                    GenerationResponse, HeartbeatResponse, FailureResponse
+                    GenerationResponse, HeartbeatResponse,
+                    FailureResponse, MetricsResponse
                 ]
                 if resp_type in (ResponseType.GENERATION, ResponseType.ENCODE):
                     resp = decoder.decode(payload)

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the llm-service project
 
 from enum import Enum, auto
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import msgspec
 
@@ -94,4 +94,4 @@ class MetricsRequest(msgspec.Struct):
 
 class MetricsResponse(msgspec.Struct):
     request_id: str
-    metrics: dict[str, float]
+    metrics: Optional[dict[str, Union[int, float]]]
