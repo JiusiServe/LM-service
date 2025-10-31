@@ -40,6 +40,7 @@ class DisaggWorker:
         proxy_addr: str,
     ):
         self.engine = engine
+
         self.worker_addr = f"ipc://{address}"
         self.proxy_addr = f"ipc://{proxy_addr}"
         self.ctx = zmq.asyncio.Context()
