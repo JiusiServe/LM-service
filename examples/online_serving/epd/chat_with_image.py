@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright contributors to the llm-service project
 import argparse
 import asyncio
+import os
 import uuid
 
 import numpy as np
@@ -9,7 +10,7 @@ from PIL import Image
 
 from vllm import SamplingParams
 from llm_service.apis.vllm.proxy import Proxy
-import os
+import vllm.envs as envs
 
 TIMECOUNT_ENABLED = os.getenv("TIMECOUNT_ENABLED", "0") in ("1", "true", "True")
 
@@ -81,6 +82,8 @@ async def main():
         ]
         await asyncio.gather(*tasks)
         if TIMECOUNT_ENABLED:
+            # wait for logging
+            await asyncio.sleep(envs.VLLM_LOG_STATS_INTERVAL)
             await p.pd_metrics_logger.get_metrics()
             await p.encoder_metrics_logger.get_metrics()
     finally:
