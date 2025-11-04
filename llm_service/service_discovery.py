@@ -6,7 +6,7 @@ import time
 from abc import ABC, abstractmethod
 
 from llm_service.protocol.protocol import ServerType
-from vllm.logger import init_logger
+from llm_service.logger_utils import init_logger
 
 logger = init_logger(__name__)
 

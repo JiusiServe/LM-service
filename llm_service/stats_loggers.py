@@ -11,13 +11,9 @@ from llm_service.protocol.protocol import ServerType
 from vllm.v1.metrics.loggers import StatLoggerBase
 from vllm.v1.metrics.stats import IterationStats, SchedulerStats
 from vllm.config import VllmConfig
-import logging
+from llm_service.logger_utils import init_logger
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
-logger.addHandler(handler)
+logger = init_logger(__name__)
 
 
 class DisaggWorkerStatsLogger(StatLoggerBase):

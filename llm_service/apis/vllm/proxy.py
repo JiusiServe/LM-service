@@ -35,7 +35,6 @@ from llm_service.stats_loggers import MetricsReporter
 from vllm.engine.protocol import EngineClient
 from vllm.inputs.data import PromptType
 from vllm.inputs.preprocess import InputPreprocessor
-from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.outputs import CompletionOutput, PoolingRequestOutput, RequestOutput
 from vllm.pooling_params import PoolingParams
@@ -43,7 +42,7 @@ from vllm.sampling_params import SamplingParams
 from vllm.transformers_utils.tokenizer import AnyTokenizer
 from vllm.utils import Device
 import llm_service.envs as llm_service_envs
-
+from llm_service.logger_utils import init_logger
 
 logger = init_logger(__name__)
 
@@ -441,10 +440,14 @@ class Proxy(EngineClient):
                     )
 
                 if resp.request_id not in self.queues:
-                    logger.warning(
-                        "Request %s may have been aborted, ignore response.",
-                        resp.request_id,
-                    )
+                    if resp_type not in (
+                        ResponseType.HEARTBEAT,
+                        ResponseType.METRICS,
+                    ):
+                        logger.warning(
+                            "Request %s may have been aborted, ignore response.",
+                            resp.request_id,
+                        )
                 elif isinstance(resp, FailureResponse):
                     self.queues[resp.request_id].put_nowait(
                         RuntimeError(f"Request error: {resp.error_message}")
@@ -495,6 +498,11 @@ class Proxy(EngineClient):
         pass
 
     async def check_health(self, server_type: ServerType, id: int):
+        # lazy initialization
+        if self.output_handler is None:
+            self.output_handler = asyncio.create_task(
+                self._run_output_handler()
+            )
         request_id = str(uuid.uuid4())
         request = HeartbeatRequest(request_id=request_id)
         q: asyncio.Queue = asyncio.Queue()

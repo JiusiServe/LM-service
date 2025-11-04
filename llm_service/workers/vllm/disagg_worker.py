@@ -25,9 +25,10 @@ from llm_service.protocol.protocol import (
     ResponseType,
 )
 from vllm.engine.protocol import EngineClient
-from vllm.logger import init_logger
 import vllm.envs as envs
 import llm_service.envs as llm_service_envs
+
+from llm_service.logger_utils import init_logger
 
 logger = init_logger(__name__)
 
