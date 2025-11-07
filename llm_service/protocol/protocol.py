@@ -45,6 +45,7 @@ class GenerationResponse(msgspec.Struct):
     text: str
     token_ids: list[int]
     prompt_token_ids: list[int]
+    mm_hashes: Optional[list[str]] = None
     finish_reason: Optional[str] = None
     stop_reason: Optional[str] = None
     # TODO: support full protocol.
@@ -62,6 +63,7 @@ class GenerationResponse(msgspec.Struct):
             text=out.text,
             token_ids=out.token_ids,
             prompt_token_ids=request_output.prompt_token_ids,
+            mm_hashes=request_output.mm_hashes,
             finish_reason=out.finish_reason,
             stop_reason=str(out.stop_reason),
         )

@@ -11,19 +11,20 @@ PID_FILE="${PID_FILE:-${CURRENT_DIR}/pid.txt}"
 # Encoder default config
 MAX_NUM_SEQS_ENCODER="${MAX_NUM_SEQS_ENCODER:-1}"
 GPU_UTILIZATION_ENCODER=0.0
-ENCODER_ADDR_PREFIX="${ENCODER_ADDR_PREFIX:-/tmp/encoder}"
-ENCODER_DEVICE_ID_BASE=0
+ENCODER_ADDR_PREFIX="${ENCODER_ADDR_PREFIX:-/tmp/encoder_dyy}"
+ENCODER_DEVICE_ID_BASE=5
 ENCODER_NUMBER=1
 
 # PD default config
 MAX_NUM_SEQS_PD="${MAX_NUM_SEQS_PD:-128}"
 GPU_UTILIZATION_PD=0.95
-PD_ADDR_PREFIX="${PD_ADDR_PREFIX:-/tmp/prefill_decode}"
+PD_ADDR_PREFIX="${PD_ADDR_PREFIX:-/tmp/prefill_decode_dyy}"
+PD_PUB_ADDR_PREFIX="${PD_PUB_ADDR_PREFIX:-/tmp/prefill_decode_pub_dyy}"
 PD_DEVICE_ID_BASE=1
-PD_NUMBER=1
+PD_NUMBER=2
 
 # Proxy default config
-PROXY_ADDR="${PROXY_ADDR:-/tmp/proxy}"
+PROXY_ADDR="${PROXY_ADDR:-/tmp/proxy_dyy}"
 
 LOG_PATH="${CURRENT_DIR}/logs"
 IMAGE_FILE_PATH=""
@@ -42,6 +43,7 @@ function start_encoder() {
         --max-num-seqs $MAX_NUM_SEQS_ENCODER \
         --enforce-eager \
         --no-enable-prefix-caching \
+        --enable-log-requests \
         --ec-transfer-config '{
             "ec_connector": "ECSharedStorageConnector",
             "ec_role": "ec_producer",
@@ -58,6 +60,7 @@ function start_pd() {
     local address=$2
     local proxy_address=$3
     local log_file=$4
+    local pub_address=$5
 
     VLLM_USE_V1=1 ASCEND_RT_VISIBLE_DEVICES=$dev_id python -m llm_service.entrypoints.worker \
         --proxy-addr $proxy_address \
@@ -66,6 +69,7 @@ function start_pd() {
         --gpu-memory-utilization $GPU_UTILIZATION_PD \
         --max-num-seqs $MAX_NUM_SEQS_PD \
         --enforce-eager \
+        --enable-log-requests \
         --ec-transfer-config '{
             "ec_connector": "ECSharedStorageConnector",
             "ec_role": "ec_consumer",
@@ -73,6 +77,7 @@ function start_pd() {
                 "shared_storage_path": "'"$SHARED_STORAGE_PATH"'"
             }
         }' \
+        --kv-events-config '{"enable_kv_cache_events": true, "publisher": "zmq", "topic": "kv-events", "endpoint": "'ipc://"$pub_address"'"}' \
         >"$log_file" 2>&1 &
     echo $! >> "$PID_FILE"
 }
@@ -100,8 +105,9 @@ function start_all() {
     for ((i=0; i<PD_NUMBER; i++)); do
         dev_id=$((PD_DEVICE_ID_BASE + i))
         address="${PD_ADDR_PREFIX}_$i"
+        pub_address="${PD_PUB_ADDR_PREFIX}_$i"
         log_file="$LOG_PATH/prefill_decode_$i.log"
-        start_pd $dev_id $address $PROXY_ADDR $log_file
+        start_pd $dev_id $address $PROXY_ADDR $log_file $pub_address
         echo "  Prefill/decode worker $i starting on device $dev_id, address: $address, log: $log_file"
     done
 
@@ -178,6 +184,7 @@ chat_with_image() {
         --proxy-addr $PROXY_ADDR \
         --encode-addr-list $(for ((i=0; i<ENCODER_NUMBER; i++)); do echo -n "${ENCODER_ADDR_PREFIX}_$i "; done) \
         --pd-addr-list $(for ((i=0; i<PD_NUMBER; i++)); do echo -n "${PD_ADDR_PREFIX}_$i "; done) \
+        --pd-kv-pub-addr-list $(for ((i=0; i<PD_NUMBER; i++)); do echo -n "${PD_PUB_ADDR_PREFIX}_$i "; done) \
         --model-name $MODEL \
         --image-path $IMAGE_FILE_PATH
 }

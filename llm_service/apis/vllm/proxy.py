@@ -28,9 +28,15 @@ from llm_service.protocol.protocol import (
     ServerType,
 )
 from llm_service.request_stats import RequestStatsMonitor
-from llm_service.routing_logic import RandomRouter, RoutingInterface
+from llm_service.routing_logic import (
+    RandomRouter,
+    RoutingInterface,
+    PrefixAwareRouter,
+    RoutingContext,
+)
 from llm_service.service_discovery import HealthCheckServiceDiscovery
 from llm_service.stats_loggers import MetricsReporter
+from llm_service.kv_cache_tracer import KVCacheSupervisor
 
 from vllm.engine.protocol import EngineClient
 from vllm.inputs.data import PromptType
@@ -58,6 +64,7 @@ class Proxy(EngineClient):
         encode_addr_list: list[str],
         pd_addr_list: list[str],
         model_name: str,
+        pd_kv_pub_addr_list: list[str],
         router: type[RoutingInterface] = RandomRouter,
         enable_health_monitor=True,
         health_check_interval=10,
@@ -71,6 +78,10 @@ class Proxy(EngineClient):
         self.proxy_addr = f"ipc://{proxy_addr}"
         self.encode_addr_list = [f"ipc://{addr}" for addr in encode_addr_list]
         self.pd_addr_list = [f"ipc://{addr}" for addr in pd_addr_list]
+        self.pd_kv_pub_addr_list = [
+            f"ipc://{addr}" for addr in pd_kv_pub_addr_list
+        ]
+
         self.to_encode_sockets = []
         for addr in self.encode_addr_list:
             socket = self.ctx.socket(zmq.constants.PUSH)
@@ -120,8 +131,16 @@ class Proxy(EngineClient):
         self.pd_request_stats_monitor = RequestStatsMonitor(
             list(range(len(self.pd_addr_list)))
         )
+
+        self.pd_kv_supervisor = KVCacheSupervisor()
+        for iid in range(len(self.pd_addr_list)):
+            self.pd_kv_supervisor.add_instance(
+                iid, self.pd_kv_pub_addr_list[iid]
+            )
+        self.pd_kv_supervisor.start_all()
+
         self.encode_router = router()
-        self.pd_router = router()
+        self.pd_router = PrefixAwareRouter()
 
         self.output_handler: Optional[asyncio.Task] = None
 
@@ -163,7 +182,7 @@ class Proxy(EngineClient):
         self,
         request: GenerationRequest,
         q: asyncio.Queue[Union[Exception, GenerationResponse]],
-    ) -> None:
+    ) -> tuple[list[int], list[str]]:
         """
         Send the encode request to one encoder worker.
         The encoder worker is selected based on hashing the request ID.
@@ -181,7 +200,11 @@ class Proxy(EngineClient):
         msg = (RequestType.ENCODE, payload)
         health_endpoints = self.encode_service_discovery.get_health_endpoints()
         request_stats = self.encode_request_stats_monitor.get_request_stats()
-        idx = self.encode_router.route_request(health_endpoints, request_stats)
+        idx = self.encode_router.route_request(
+            RoutingContext(
+                endpoints=health_endpoints, request_stats=request_stats
+            )
+        )
         self.encode_request_stats_monitor.on_new_request(
             idx, request_id=request.request_id
         )
@@ -204,6 +227,7 @@ class Proxy(EngineClient):
 
             if isinstance(response, Exception):
                 raise response
+            return response.prompt_token_ids or [], response.mm_hashes or []
         finally:
             self.encode_request_stats_monitor.on_request_completed(
                 idx, request_id=request.request_id
@@ -213,6 +237,8 @@ class Proxy(EngineClient):
         self,
         request: GenerationRequest,
         q: asyncio.Queue[Union[Exception, GenerationResponse]],
+        token_ids: list[int] = [],
+        mm_hashes: list[str] = [],
     ):
         """
         Send the generation request to a PD worker and yield its response.
@@ -231,7 +257,15 @@ class Proxy(EngineClient):
         msg = (RequestType.GENERATION, payload)
         health_endpoints = self.pd_service_discovery.get_health_endpoints()
         request_stats = self.pd_request_stats_monitor.get_request_stats()
-        idx = self.pd_router.route_request(health_endpoints, request_stats)
+        idx = self.pd_router.route_request(
+            RoutingContext(
+                endpoints=health_endpoints,
+                request_stats=request_stats,
+                prefix_info=self.pd_kv_supervisor,
+                token_ids=token_ids,
+                mm_hashes=mm_hashes,
+            )
+        )
         self.pd_request_stats_monitor.on_new_request(
             idx, request_id=request.request_id
         )
@@ -337,10 +371,12 @@ class Proxy(EngineClient):
                 request.multi_modal_data = _encode_mm_data(
                     prompt["multi_modal_data"]
                 )
-                await self._run_encode(request, q)
+                token_ids, mm_hashes = await self._run_encode(request, q)
 
             # TODO: support pd separation
-            async for pd_response in self._run_pd(request, q):
+            async for pd_response in self._run_pd(
+                request, q, token_ids, mm_hashes
+            ):
                 yield self._to_request_output(pd_response)
         except msgspec.ValidationError as e:
             raise RuntimeError(f"Invalid Parameters: {e}.") from e

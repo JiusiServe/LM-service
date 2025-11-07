@@ -26,6 +26,13 @@ parser.add_argument(
     nargs="+",
     help="List of pd addresses",
 )
+parser.add_argument(
+    "--pd-kv-pub-addr-list",
+    required=True,
+    nargs="+",
+    help="List of pd addresses",
+)
+
 parser.add_argument("--model-name", required=True, help="Model name")
 parser.add_argument("--image-path", required=True, help="Path to the image")
 args = parser.parse_args()
@@ -56,6 +63,7 @@ async def main():
         proxy_addr=args.proxy_addr,
         encode_addr_list=args.encode_addr_list,
         pd_addr_list=args.pd_addr_list,
+        pd_kv_pub_addr_list=args.pd_kv_pub_addr_list,
         model_name=args.model_name,
         enable_health_monitor=False,
     )
