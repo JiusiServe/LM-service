@@ -26,6 +26,13 @@ parser.add_argument(
     nargs="+",
     help="List of pd addresses",
 )
+parser.add_argument(
+    "--transfer-protocol",
+    type=str,
+    default="ipc",
+    choices=["ipc", "tcp"],
+    help="ZMQ transfer protocol, whether ZMQ uses IPC or TCP connection",
+)
 parser.add_argument("--model-name", required=True, help="Model name")
 parser.add_argument("--image-path", required=True, help="Path to the image")
 args = parser.parse_args()
@@ -58,6 +65,7 @@ async def main():
         pd_addr_list=args.pd_addr_list,
         model_name=args.model_name,
         enable_health_monitor=False,
+        transfer_protocol=args.transfer_protocol,
     )
     try:
         # The current prompt format follows Qwen2.5-VL-3B-Instruct.

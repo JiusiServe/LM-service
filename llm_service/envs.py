@@ -5,13 +5,19 @@
 import os
 from typing import Any, Callable
 
+from vllm.envs import env_with_choices
+
 _TRUE_VALUES = {"1", "true", "t", "y", "yes", "on"}
 
 # --8<-- [start:env-vars-definition]
 environment_variables: dict[str, Callable[[], Any]] = {
     "TIMECOUNT_ENABLED": lambda: os.getenv("TIMECOUNT_ENABLED", "0").lower()
     in _TRUE_VALUES,
+    "TRANSFER_PROTOCOL": env_with_choices(
+        "TRANSFER_PROTOCOL", None, ["tcp", "ipc"]
+    ),
 }
+
 # --8<-- [end:env-vars-definition]
 
 

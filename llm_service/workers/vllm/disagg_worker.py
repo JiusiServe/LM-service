@@ -3,6 +3,7 @@
 
 import asyncio
 import os
+import re
 import time
 from typing import Any, Optional, Union
 
@@ -39,16 +40,25 @@ class DisaggWorker:
         engine: EngineClient,
         address: str,
         proxy_addr: str,
+        transfer_protocol: Optional[str] = None,
     ):
         self.engine = engine
-        self.worker_addr = f"ipc://{address}"
-        self.proxy_addr = f"ipc://{proxy_addr}"
+        self.transfer_protocol = (
+            llm_service_envs.TRANSFER_PROTOCOL or transfer_protocol or "ipc"
+        )
+        self.worker_addr = f"{self.transfer_protocol}://{address}"
+        self.proxy_addr = f"{self.transfer_protocol}://{proxy_addr}"
         self.ctx = zmq.asyncio.Context()
+        ipv6_pattern = r"^\[(.*?)\]:(\d+)$"
+        if re.match(ipv6_pattern, address) and self.transfer_protocol == "tcp":
+            self.ctx.setsockopt(zmq.constants.IPV6, 1)
         self.from_proxy = self.ctx.socket(zmq.constants.PULL)
         self.from_proxy.bind(self.worker_addr)
         self.to_proxy = self.ctx.socket(zmq.constants.PUSH)
         self.to_proxy.connect(self.proxy_addr)
-
+        logger.info(
+            f"Worker address: {self.worker_addr}, proxy_addr: {self.proxy_addr}"
+        )
         self.decoder_generate = msgspec.msgpack.Decoder(GenerationRequest)
         self.decoder_heartbeat = msgspec.msgpack.Decoder(HeartbeatRequest)
         self.decoder_abort = msgspec.msgpack.Decoder(GenerationRequest)
@@ -63,8 +73,10 @@ class DisaggWorker:
         for running_request in self.running_requests:
             running_request.cancel()
 
-        socket_path = self.worker_addr.replace("ipc://", "")
-        if os.path.exists(socket_path):
+        socket_path = self.worker_addr.replace(
+            f"{self.transfer_protocol}://", ""
+        )
+        if self.transfer_protocol == "ipc" and os.path.exists(socket_path):
             os.remove(socket_path)
 
     async def run_busy_loop(self):

@@ -28,6 +28,7 @@ async def run(args, engine: EngineClient):
         engine=engine,
         address=args.worker_addr,
         proxy_addr=args.proxy_addr,
+        transfer_protocol=args.transfer_protocol,
     )
 
     try:
@@ -72,6 +73,13 @@ if __name__ == "__main__":
         "--disable-frontend-multiprocessing",
         action="store_true",
         help="Disable MQLLMEngine for AsyncLLMEngine.",
+    )
+    parser.add_argument(
+        "--transfer-protocol",
+        type=str,
+        default="ipc",
+        choices=["ipc", "tcp"],
+        help="ZMQ transfer protocol, whether ZMQ uses IPC or TCP connection",
     )
     AsyncEngineArgs.add_cli_args(parser)
     uvloop.run(main(parser.parse_args()))

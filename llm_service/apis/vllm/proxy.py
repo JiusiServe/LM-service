@@ -4,6 +4,7 @@
 import asyncio
 from collections import defaultdict
 import os
+import regex as re
 import time
 import uuid
 from collections.abc import AsyncGenerator, Mapping
@@ -62,15 +63,29 @@ class Proxy(EngineClient):
         enable_health_monitor=True,
         health_check_interval=10,
         health_threshold=3,
+        transfer_protocol=None,
     ):
         self.queues: dict[str, asyncio.Queue] = {}
 
         self.encoder = msgspec.msgpack.Encoder()
-
+        self.transfer_protocol = (
+            llm_service_envs.TRANSFER_PROTOCOL or transfer_protocol or "ipc"
+        )
         self.ctx = zmq.asyncio.Context()
-        self.proxy_addr = f"ipc://{proxy_addr}"
-        self.encode_addr_list = [f"ipc://{addr}" for addr in encode_addr_list]
-        self.pd_addr_list = [f"ipc://{addr}" for addr in pd_addr_list]
+        ipv6_pattern = r"^\[(.*?)\]:(\d+)$"
+        if (
+            re.match(ipv6_pattern, proxy_addr)
+            and self.transfer_protocol == "tcp"
+        ):
+            self.ctx.setsockopt(zmq.constants.IPV6, 1)
+        self.proxy_addr = f"{self.transfer_protocol}://{proxy_addr}"
+        logger.info(f"Proxy address: {self.proxy_addr}")
+        self.encode_addr_list = [
+            f"{self.transfer_protocol}://{addr}" for addr in encode_addr_list
+        ]
+        self.pd_addr_list = [
+            f"{self.transfer_protocol}://{addr}" for addr in pd_addr_list
+        ]
         self.to_encode_sockets = []
         for addr in self.encode_addr_list:
             socket = self.ctx.socket(zmq.constants.PUSH)
@@ -151,8 +166,10 @@ class Proxy(EngineClient):
         if (task := self.output_handler) is not None:
             task.cancel()
 
-        socket_path = self.proxy_addr.replace("ipc://", "")
-        if os.path.exists(socket_path):
+        socket_path = self.proxy_addr.replace(
+            f"{self.transfer_protocol}://", ""
+        )
+        if self.transfer_protocol == "ipc" and os.path.exists(socket_path):
             os.remove(socket_path)
 
     async def log_metrics(self) -> None:
