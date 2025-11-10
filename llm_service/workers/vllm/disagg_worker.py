@@ -41,9 +41,11 @@ class DisaggWorker:
         proxy_addr: str,
     ):
         self.engine = engine
-        self.worker_addr = f"ipc://{address}"
-        self.proxy_addr = f"ipc://{proxy_addr}"
+        self.worker_addr = address
+        self.proxy_addr = proxy_addr
         self.ctx = zmq.asyncio.Context()
+        if llm_service_envs.TRANSFER_PROTOCOL == "tcp6":
+            self.ctx.setsockopt(zmq.constants.IPV6, 1)
         self.from_proxy = self.ctx.socket(zmq.constants.PULL)
         self.from_proxy.bind(self.worker_addr)
         self.to_proxy = self.ctx.socket(zmq.constants.PUSH)

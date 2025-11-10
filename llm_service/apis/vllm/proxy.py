@@ -68,9 +68,11 @@ class Proxy(EngineClient):
         self.encoder = msgspec.msgpack.Encoder()
 
         self.ctx = zmq.asyncio.Context()
-        self.proxy_addr = f"ipc://{proxy_addr}"
-        self.encode_addr_list = [f"ipc://{addr}" for addr in encode_addr_list]
-        self.pd_addr_list = [f"ipc://{addr}" for addr in pd_addr_list]
+        if llm_service_envs.TRANSFER_PROTOCOL == "tcp6":
+            self.ctx.setsockopt(zmq.constants.IPV6, 1)
+        self.proxy_addr = proxy_addr
+        self.encode_addr_list = encode_addr_list
+        self.pd_addr_list = pd_addr_list
         self.to_encode_sockets = []
         for addr in self.encode_addr_list:
             socket = self.ctx.socket(zmq.constants.PUSH)
