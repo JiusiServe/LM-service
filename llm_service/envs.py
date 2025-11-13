@@ -16,6 +16,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "TRANSFER_PROTOCOL": env_with_choices(
         "TRANSFER_PROTOCOL", None, ["tcp", "ipc"]
     ),
+    "PREFILL_ROUTER": os.getenv("PREFILL_ROUTER", "RandomRouter"),
+    "DECODE_ROUTER": os.getenv("DECODE_ROUTER", "RandomRouter"),
+    "PD_ROUTER": os.getenv("PD_ROUTER", "RandomRouter"),
+    "ENCODE_ROUTER": os.getenv("ENCODE_ROUTER", "RandomRouter"),
 }
 
 # --8<-- [end:env-vars-definition]

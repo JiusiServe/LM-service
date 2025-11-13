@@ -17,6 +17,8 @@ from vllm.outputs import RequestOutput
 
 class ServerType(Enum):
     E_INSTANCE = auto()
+    P_INSTANCE = auto()
+    D_INSTANCE = auto()
     PD_INSTANCE = auto()
 
 
@@ -24,8 +26,9 @@ class RequestType:
     GENERATION = b"\x00"
     ABORT = b"\x01"
     ENCODE = b"\x02"
-    HEARTBEAT = b"\x03"
-    METRICS = b"\x04"
+    PREFILL = b"\x03"
+    HEARTBEAT = b"\x04"
+    METRICS = b"\x05"
 
 
 class PDAbortRequest(msgspec.Struct):
@@ -36,8 +39,9 @@ class ResponseType:
     GENERATION = b"\x00"
     FAILURE = b"\x01"
     ENCODE = b"\x02"
-    HEARTBEAT = b"\x03"
-    METRICS = b"\x04"
+    PREFILL = b"\x03"
+    HEARTBEAT = b"\x04"
+    METRICS = b"\x05"
 
 
 class GenerationResponse(msgspec.Struct):

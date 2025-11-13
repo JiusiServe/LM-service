@@ -103,6 +103,10 @@ class DisaggWorker:
             gen_req = self.decoder_generate.decode(req_data)
             gen_req.sampling_params.max_tokens = 1
             await self._encode_handler(gen_req)
+        elif req_type == RequestType.PREFILL:
+            gen_req = self.decoder_generate.decode(req_data)
+            gen_req.sampling_params.max_tokens = 1
+            await self._prefill_handler(gen_req)
         elif req_type == RequestType.GENERATION:
             gen_req = self.decoder_generate.decode(req_data)
             await self._generation_handler(gen_req)
@@ -118,6 +122,13 @@ class DisaggWorker:
         else:
             raise Exception(f"Unknown Request Type: {req_type.decode()}.")
 
+    async def _prefill_handler(self, req: GenerationRequest):
+        task = asyncio.create_task(
+            self._generate(req, lambda b: (ResponseType.PREFILL, b))
+        )
+        self.running_requests.add(task)
+        task.add_done_callback(self.running_requests.discard)
+        
     async def _encode_handler(self, req: GenerationRequest):
         task = asyncio.create_task(
             self._generate(req, lambda b: (ResponseType.ENCODE, b))

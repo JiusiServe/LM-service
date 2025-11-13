@@ -29,7 +29,7 @@ from llm_service.protocol.protocol import (
     ServerType,
 )
 from llm_service.request_stats import RequestStatsMonitor
-from llm_service.routing_logic import RandomRouter, RoutingInterface
+from llm_service.routing_logic import RandomRouter, RoundRobinRouter, LeastInFlightRouter, RoutingInterface
 from llm_service.service_discovery import HealthCheckServiceDiscovery
 from llm_service.stats_loggers import MetricsReporter
 
@@ -47,19 +47,30 @@ from llm_service.logger_utils import init_logger
 
 logger = init_logger(__name__)
 
-
+ROUTER_MAP = {
+    "RandomRouter": RandomRouter,
+    "RoundRobinRouter": RoundRobinRouter,
+    "LeastInFlightRouter": LeastInFlightRouter,
+}
+    
+    
 class Proxy(EngineClient):
     """
     Proxy
     """
-
+    # TODO : router 需要从环境变量获取
     def __init__(
         self,
         proxy_addr: str,
         encode_addr_list: list[str],
-        pd_addr_list: list[str],
         model_name: str,
-        router: type[RoutingInterface] = RandomRouter,
+        pd_addr_list: Optional[list[str]] = None,
+        p_addr_list: Optional[list[str]] = None,
+        d_addr_list: Optional[list[str]] = None,
+        # encode_router: type[RoutingInterface] = RandomRouter,
+        # pd_router: type[RoutingInterface] = RandomRouter,
+        # p_router: type[RoutingInterface] = RandomRouter,
+        # d_router: type[RoutingInterface] = RandomRouter,
         enable_health_monitor=True,
         health_check_interval=10,
         health_threshold=3,
@@ -83,23 +94,133 @@ class Proxy(EngineClient):
         self.encode_addr_list = [
             f"{self.transfer_protocol}://{addr}" for addr in encode_addr_list
         ]
-        self.pd_addr_list = [
-            f"{self.transfer_protocol}://{addr}" for addr in pd_addr_list
-        ]
+
+        self.enable_health_monitor = enable_health_monitor
+        self.health_check_interval = health_check_interval
+        self.health_threshold = health_threshold
+        
+        # Judge whether pd merged or not
+        if (p_addr_list and d_addr_list and not pd_addr_list) or (
+            not p_addr_list and not d_addr_list and pd_addr_list
+        ):
+            if not p_addr_list and not d_addr_list and pd_addr_list:
+                self.is_pd_merged = True
+        else:
+            raise ValueError(
+                "Invalid input: Input combinations are incorrect, please check the documentation."
+            )
+        
+        # init p-d(or pd) connections
+        if self.is_pd_merged:    
+            self.pd_addr_list = [
+                f"{self.transfer_protocol}://{addr}" for addr in pd_addr_list
+            ]
+            
+            self.to_pd_sockets = []
+            for addr in self.pd_addr_list:
+                socket = self.ctx.socket(zmq.constants.PUSH)
+                socket.connect(addr)
+                self.to_pd_sockets.append(socket)
+            
+            self.pd_service_discovery = HealthCheckServiceDiscovery(
+                server_type=ServerType.PD_INSTANCE,
+                instances=list(range(len(self.pd_addr_list))),
+                enable_health_monitor=self.enable_health_monitor,
+                health_check_interval=self.health_check_interval,
+                health_threshold=self.health_threshold,
+                health_check_func=self.check_health,
+            )
+            self.pd_metrics_logger = MetricsReporter(
+                server_type=ServerType.PD_INSTANCE,
+                instances=list(range(len(self.pd_addr_list))),
+                addr=self.pd_addr_list,
+                get_metrics_func=self.get_metrics,
+            )
+            self.pd_request_stats_monitor = RequestStatsMonitor(
+                list(range(len(self.pd_addr_list)))
+            self.pd_router = ROUTER_MAP.get(llm_service_envs.PREFILL_ROUTER, RandomRouter)()
+            self.proxy_to_pd_time_count: defaultdict[int, int] = defaultdict(int)
+            self.proxy_to_pd_time_total: defaultdict[int, float] = defaultdict(
+                float
+            )
+        )
+        else:
+            self.p_addr_list = [
+                f"{self.transfer_protocol}://{addr}" for addr in p_addr_list
+            ]
+            self.d_addr_list = [
+                f"{self.transfer_protocol}://{addr}" for addr in d_addr_list
+            ]
+
+            for addr in self.p_addr_list:
+                socket = self.ctx.socket(zmq.constants.PUSH)
+                socket.connect(addr)
+                self.to_p_sockets.append(socket)
+
+            for addr in self.d_addr_list:
+                socket = self.ctx.socket(zmq.constants.PUSH)
+                socket.connect(addr)
+                self.to_d_sockets.append(socket)
+            
+            self.p_service_discovery = HealthCheckServiceDiscovery(
+                server_type=ServerType.P_INSTANCE,
+                instances=list(range(len(self.p_addr_list))),
+                enable_health_monitor=self.enable_health_monitor,
+                health_check_interval=self.health_check_interval,
+                health_threshold=self.health_threshold,
+                health_check_func=self.check_health,
+            )
+            
+            self.d_service_discovery = HealthCheckServiceDiscovery(
+                server_type=ServerType.D_INSTANCE,
+                instances=list(range(len(self.d_addr_list))),
+                enable_health_monitor=self.enable_health_monitor,
+                health_check_interval=self.health_check_interval,
+                health_threshold=self.health_threshold,
+                health_check_func=self.check_health,
+            )
+            
+            self.p_metrics_logger = MetricsReporter(
+                server_type=ServerType.P_INSTANCE,
+                instances=list(range(len(self.p_addr_list + self.d_addr_list))),
+                addr=self.p_addr_list + self.d_addr_list,
+                get_metrics_func=self.get_metrics,
+            )
+            
+            self.d_metrics_logger = MetricsReporter(
+                server_type=ServerType.P_INSTANCE,
+                instances=list(range(len(self.p_addr_list + self.d_addr_list))),
+                addr=self.p_addr_list + self.d_addr_list,
+                get_metrics_func=self.get_metrics,
+            )
+            
+            self.p_request_stats_monitor = RequestStatsMonitor(
+                list(range(len(self.p_addr_list)))
+            )
+            
+            self.d_request_stats_monitor = RequestStatsMonitor(
+                list(range(len(self.p_addr_list)))
+            )
+            
+            self.p_router = ROUTER_MAP.get(llm_service_envs.PREFILL_ROUTER, RandomRouter)()
+            self.d_router = ROUTER_MAP.get(llm_service_envs.DECODE_ROUTER, RandomRouter)()
+
+            self.proxy_to_p_time_count: defaultdict[int, int] = defaultdict(int)
+            self.proxy_to_p_time_total: defaultdict[int, float] = defaultdict(
+                float
+            )
+            
+            self.proxy_to_d_time_count: defaultdict[int, int] = defaultdict(int)
+            self.proxy_to_d_time_total: defaultdict[int, float] = defaultdict(
+                float
+            )
+            
         self.to_encode_sockets = []
         for addr in self.encode_addr_list:
             socket = self.ctx.socket(zmq.constants.PUSH)
             socket.connect(addr)
             self.to_encode_sockets.append(socket)
-        self.to_pd_sockets = []
-        for addr in self.pd_addr_list:
-            socket = self.ctx.socket(zmq.constants.PUSH)
-            socket.connect(addr)
-            self.to_pd_sockets.append(socket)
 
-        self.enable_health_monitor = enable_health_monitor
-        self.health_check_interval = health_check_interval
-        self.health_threshold = health_threshold
         self.encode_service_discovery = HealthCheckServiceDiscovery(
             server_type=ServerType.E_INSTANCE,
             instances=list(range(len(self.encode_addr_list))),
@@ -109,20 +230,7 @@ class Proxy(EngineClient):
             health_check_func=self.check_health,
         )
 
-        self.pd_service_discovery = HealthCheckServiceDiscovery(
-            server_type=ServerType.PD_INSTANCE,
-            instances=list(range(len(self.pd_addr_list))),
-            enable_health_monitor=self.enable_health_monitor,
-            health_check_interval=self.health_check_interval,
-            health_threshold=self.health_threshold,
-            health_check_func=self.check_health,
-        )
-        self.pd_metrics_logger = MetricsReporter(
-            server_type=ServerType.PD_INSTANCE,
-            instances=list(range(len(self.pd_addr_list))),
-            addr=self.pd_addr_list,
-            get_metrics_func=self.get_metrics,
-        )
+
         self.encoder_metrics_logger = MetricsReporter(
             server_type=ServerType.E_INSTANCE,
             instances=list(range(len(self.encode_addr_list))),
@@ -132,12 +240,8 @@ class Proxy(EngineClient):
         self.encode_request_stats_monitor = RequestStatsMonitor(
             list(range(len(self.encode_addr_list)))
         )
-        self.pd_request_stats_monitor = RequestStatsMonitor(
-            list(range(len(self.pd_addr_list)))
-        )
-        self.encode_router = router()
-        self.pd_router = router()
 
+        self.encode_router = ROUTER_MAP.get(llm_service_envs.ENCODE_ROUTER, RandomRouter)()
         self.output_handler: Optional[asyncio.Task] = None
 
         # Dummy: needed for EngineClient Protocol.
@@ -150,10 +254,7 @@ class Proxy(EngineClient):
             task="generate",
             seed=42,
         )
-        self.proxy_to_pd_time_count: defaultdict[int, int] = defaultdict(int)
-        self.proxy_to_pd_time_total: defaultdict[int, float] = defaultdict(
-            float
-        )
+
         self.proxy_to_encode_time_count: defaultdict[int, int] = defaultdict(
             int
         )
@@ -280,6 +381,111 @@ class Proxy(EngineClient):
                 idx, request_id=request.request_id
             )
 
+    async def _run_prefill(
+        self,
+        request: GenerationRequest,
+        q: asyncio.Queue[Union[Exception, GenerationResponse]],
+    ):
+        """
+        Send the generation request to a PD worker and yield its response.
+        The PD worker is selected based on hashing the request ID.
+        """
+        if not self.to_p_sockets:
+            raise RuntimeError(
+                "No Prefill workers configured: p_addr_list is empty."
+            )
+
+        try:
+            payload = self.encoder.encode(request)
+        except Exception as e:
+            raise RuntimeError("Failed to serialize GenerationRequest") from e
+
+        msg = (RequestType.PREFILL, payload)
+        health_endpoints = self.p_service_discovery.get_health_endpoints()
+        request_stats = self.p_request_stats_monitor.get_request_stats()
+        idx = self.p_router.route_request(health_endpoints, request_stats)
+        self.p_request_stats_monitor.on_new_request(
+            idx, request_id=request.request_id
+        )
+
+        try:
+            socket = self.to_p_sockets[idx]
+            if llm_service_envs.TIMECOUNT_ENABLED:
+                proxy_to_p_time_start = time.perf_counter()
+            await socket.send_multipart(msg, copy=False)
+            response = await q.get()
+            if (
+                llm_service_envs.TIMECOUNT_ENABLED
+                and isinstance(response, GenerationResponse)
+                and response.proxy_to_worker_time_end
+            ):
+                self.proxy_to_p_time_count[idx] += 1
+                self.proxy_to_p_time_total[idx] += (
+                    response.proxy_to_worker_time_end
+                    - proxy_to_encode_time_start  # type: ignore
+                )
+
+            if isinstance(response, Exception):
+                raise response
+        finally:
+            self.p_request_stats_monitor.on_request_completed(
+                idx, request_id=request.request_id
+            )
+
+    async def _run_decode(
+        self,
+        request: GenerationRequest,
+        q: asyncio.Queue[Union[Exception, GenerationResponse]],
+    ):
+        """
+        Send the generation request to a PD worker and yield its response.
+        The PD worker is selected based on hashing the request ID.
+        """
+        if not self.to_d_sockets:
+            raise RuntimeError(
+                "No Decode workers configured: d_addr_list is empty."
+            )
+
+        try:
+            payload = self.encoder.encode(request)
+        except Exception as e:
+            raise RuntimeError("Failed to serialize GenerationRequest") from e
+
+        msg = (RequestType.GENERATION, payload)
+        health_endpoints = self.d_service_discovery.get_health_endpoints()
+        request_stats = self.d_request_stats_monitor.get_request_stats()
+        idx = self.d_router.route_request(health_endpoints, request_stats)
+        self.d_request_stats_monitor.on_new_request(
+            idx, request_id=request.request_id
+        )
+
+        try:
+            socket = self.to_d_sockets[idx]
+            if llm_service_envs.TIMECOUNT_ENABLED:
+                proxy_to_d_time_start = time.perf_counter()
+            await socket.send_multipart(msg, copy=False)
+            finished = False
+            while not finished:
+                response = await q.get()
+                if isinstance(response, Exception):
+                    raise response
+                if (
+                    llm_service_envs.TIMECOUNT_ENABLED
+                    and isinstance(response, GenerationResponse)
+                    and response.proxy_to_worker_time_end
+                ):
+                    self.proxy_to_d_time_count[idx] += 1
+                    self.proxy_to_d_time_total[idx] += (
+                        response.proxy_to_worker_time_end
+                        - proxy_to_d_time_start  # type: ignore
+                    )
+                finished = response.finish_reason is not None
+                yield response
+        finally:
+            self.d_request_stats_monitor.on_request_completed(
+                idx, request_id=request.request_id
+            )
+            
     def _to_request_output(self, resp: GenerationResponse) -> RequestOutput:
         """Convert a PD/Generate response to vLLM RequestOutput.
 
@@ -324,9 +530,16 @@ class Proxy(EngineClient):
             )
         if self.encode_service_discovery.should_launch_health_monitor():
             self.encode_service_discovery.launch_health_monitor()
-        if self.pd_service_discovery.should_launch_health_monitor():
-            self.pd_service_discovery.launch_health_monitor()
-
+        # PD-merged or not
+        if self.is_pd_merged:
+            if self.pd_service_discovery.should_launch_health_monitor():
+                self.pd_service_discovery.launch_health_monitor()
+        else:
+            if self.p_service_discovery.should_launch_health_monitor():
+                self.p_service_discovery.launch_health_monitor()
+            if self.d_service_discovery.should_launch_health_monitor():
+                self.d_service_discovery.launch_health_monitor()
+        
         if not request_id:
             request_id = uuid.uuid4().hex
 
@@ -357,8 +570,14 @@ class Proxy(EngineClient):
                 await self._run_encode(request, q)
 
             # TODO: support pd separation
-            async for pd_response in self._run_pd(request, q):
-                yield self._to_request_output(pd_response)
+            if self.is_pd_merged:
+                async for pd_response in self._run_pd(request, q):
+                    yield self._to_request_output(pd_response)
+            else:
+                await self._run_prefill(request, q)
+                async for d_response in self._run_decode(request, q):
+                    yield self._to_request_output(d_response)
+                    
         except msgspec.ValidationError as e:
             raise RuntimeError(f"Invalid Parameters: {e}.") from e
         finally:
@@ -408,9 +627,20 @@ class Proxy(EngineClient):
                 encode_unhealths = (
                     self.encode_service_discovery.get_unhealth_endpoints()
                 )
-                pd_unhealths = (
-                    self.pd_service_discovery.get_unhealth_endpoints()
-                )
+                pd_unhealths = []
+                p_unhealths = []
+                d_unhealths = []
+                if self.is_pd_merged:
+                    pd_unhealths = (
+                        self.pd_service_discovery.get_unhealth_endpoints()
+                    )
+                else:
+                    p_unhealths = (
+                        self.p_service_discovery.get_unhealth_endpoints()
+                    )
+                    d_unhealths = (
+                        self.d_service_discovery.get_unhealth_endpoints()
+                    )
                 tasks = []
                 if encode_unhealths:
                     tasks.append(
@@ -428,6 +658,23 @@ class Proxy(EngineClient):
                             request_stats_monitor=self.pd_request_stats_monitor,
                         )
                     )
+                if p_unhealths:
+                    tasks.append(
+                        self.abort_requests_from_unhealth_endpoints(
+                            server_type=ServerType.P_INSTANCE,
+                            unhealth_endpoints=p_unhealths,
+                            request_stats_monitor=self.p_request_stats_monitor,
+                        )
+                    )
+                if d_unhealths:
+                    tasks.append(
+                        self.abort_requests_from_unhealth_endpoints(
+                            server_type=ServerType.D_INSTANCE,
+                            unhealth_endpoints=d_unhealths,
+                            request_stats_monitor=self.d_request_stats_monitor,
+                        )
+                    )
+                    
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -437,13 +684,15 @@ class Proxy(EngineClient):
                 resp_type, payload = await socket.recv_multipart()
 
                 # Decode response according to its type.
+                # TODO : judge whether we need to add PREFILL response type
                 resp: Union[
                     GenerationResponse,
                     HeartbeatResponse,
                     FailureResponse,
                     MetricsResponse,
                 ]
-                if resp_type in (ResponseType.GENERATION, ResponseType.ENCODE):
+                # TODO: maybe we can have a mapping from resp_type to prefill
+                if resp_type in (ResponseType.GENERATION, ResponseType.ENCODE, ResponseType.PREFILL):
                     resp = decoder.decode(payload)
                 elif resp_type == ResponseType.HEARTBEAT:
                     resp = heartbeat_decoder.decode(payload)
