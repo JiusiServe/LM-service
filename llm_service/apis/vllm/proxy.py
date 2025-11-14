@@ -103,11 +103,10 @@ class Proxy(EngineClient):
 
         self.is_pd_merged = False
         # Judge whether pd merged or not
-        if (p_addr_list and d_addr_list and not pd_addr_list) or (
-            not p_addr_list and not d_addr_list and pd_addr_list
-        ):
-            if not p_addr_list and not d_addr_list and pd_addr_list:
-                self.is_pd_merged = True
+        if (p_addr_list and d_addr_list and not pd_addr_list):
+            pass  # Not merged, do nothing
+        elif (not p_addr_list and not d_addr_list and pd_addr_list):
+            self.is_pd_merged = True
         else:
             raise ValueError(
                 "Invalid input: Input combinations are incorrect, please check the documentation."
