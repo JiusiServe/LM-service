@@ -343,6 +343,7 @@ class Proxy(EngineClient):
             request_id=request_id,
             prompt=prompt_text,
             sampling_params=sampling_params,
+            proxy_addr=self.proxy_addr,
         )
 
         try:
@@ -521,7 +522,9 @@ class Proxy(EngineClient):
                 self._run_output_handler()
             )
         request_id = str(uuid.uuid4())
-        request = HeartbeatRequest(request_id=request_id)
+        request = HeartbeatRequest(
+            request_id=request_id, proxy_addr=self.proxy_addr
+        )
         q: asyncio.Queue = asyncio.Queue()
         self.queues[request_id] = q
         try:
@@ -553,7 +556,9 @@ class Proxy(EngineClient):
 
     async def get_metrics(self, server_type: ServerType, id: int):
         request_id = str(uuid.uuid4())
-        request = MetricsRequest(request_id=request_id)
+        request = MetricsRequest(
+            request_id=request_id, proxy_addr=self.proxy_addr
+        )
         q: asyncio.Queue = asyncio.Queue()
         self.queues[request_id] = q
         try:

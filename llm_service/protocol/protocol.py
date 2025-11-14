@@ -71,11 +71,13 @@ class GenerationRequest(msgspec.Struct):
     request_id: str
     prompt: str
     sampling_params: SamplingParams
+    proxy_addr: str
     multi_modal_data: Optional[dict[str, Any]] = None
 
 
 class HeartbeatRequest(msgspec.Struct):
     request_id: str
+    proxy_addr: str
 
 
 class HeartbeatResponse(msgspec.Struct):
@@ -90,6 +92,7 @@ class FailureResponse(msgspec.Struct):
 
 class MetricsRequest(msgspec.Struct):
     request_id: str
+    proxy_addr: str
 
 
 class MetricsResponse(msgspec.Struct):
