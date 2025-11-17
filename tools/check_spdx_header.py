@@ -15,7 +15,9 @@ from enum import Enum
 from pathlib import Path
 
 LICENSE_LINE = "# SPDX-License-Identifier: Apache-2.0"
-COPYRIGHT_LINE = "# SPDX-FileCopyrightText: Copyright contributors to the LM-Service project"
+COPYRIGHT_LINE = (
+    "# SPDX-FileCopyrightText: Copyright contributors to the LM-Service project"
+)
 FULL_HEADER = f"{LICENSE_LINE}\n{COPYRIGHT_LINE}"
 
 
