@@ -86,7 +86,7 @@ function start_prefill() {
             "kv_role": "kv_producer",
             "kv_parallel_size": 1,
             "kv_port": "20001",
-            "engine_id": 0,
+            "engine_id": "0",
             "kv_rank": 0,
             "kv_connector_module_path": "vllm_ascend.distributed.mooncake_connector",
             "kv_connector_extra_config": {
@@ -123,7 +123,7 @@ function start_decoder() {
             "kv_role": "kv_consumer",
             "kv_parallel_size": 1,
             "kv_port": "20002",
-            "engine_id": 0,
+            "engine_id": "0",
             "kv_rank": 0,
             "kv_connector_module_path": "vllm_ascend.distributed.mooncake_connector",
             "kv_connector_extra_config": {
