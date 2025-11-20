@@ -60,8 +60,12 @@ class HealthCheckServiceDiscovery(ServiceDiscovery):
         self.enable_health_monitor = enable_health_monitor
         self._health_check_interval = health_check_interval
         self._health_threshold = health_threshold
-        self._success_count: dict[str, int] = {addr: 0 for addr in instances.keys()}
-        self._fail_count: dict[str, int] = {addr: 0 for addr in instances.keys()}
+        self._success_count: dict[str, int] = {
+            addr: 0 for addr in instances.keys()
+        }
+        self._fail_count: dict[str, int] = {
+            addr: 0 for addr in instances.keys()
+        }
         self._health_check_func = health_check_func
         self._health_monitor_handler = None
 
