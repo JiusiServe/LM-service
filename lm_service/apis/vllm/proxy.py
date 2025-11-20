@@ -331,7 +331,7 @@ class Proxy(EngineClient):
             if lm_service_envs.TIMECOUNT_ENABLED:
                 proxy_to_encode_time_start = time.perf_counter()
             await socket.send_multipart(msg, copy=False)
-            response = await q.get()
+            response = await self._await_with_timeout(request.request_id, q)
             if (
                 lm_service_envs.TIMECOUNT_ENABLED
                 and isinstance(response, GenerationResponse)
@@ -384,7 +384,7 @@ class Proxy(EngineClient):
             await socket.send_multipart(msg, copy=False)
             finished = False
             while not finished:
-                response = await q.get()
+                response = await self._await_with_timeout(request.request_id, q)
                 if isinstance(response, Exception):
                     raise response
                 if (
@@ -435,7 +435,7 @@ class Proxy(EngineClient):
             if lm_service_envs.TIMECOUNT_ENABLED:
                 proxy_to_p_time_start = time.perf_counter()
             await socket.send_multipart(msg, copy=False)
-            response = await q.get()
+            response = await self._await_with_timeout(request.request_id, q)
             if (
                 lm_service_envs.TIMECOUNT_ENABLED
                 and isinstance(response, GenerationResponse)
@@ -486,7 +486,7 @@ class Proxy(EngineClient):
             await socket.send_multipart(msg, copy=False)
             finished = False
             while not finished:
-                response = await q.get()
+                response = await self._await_with_timeout(request.request_id, q)
                 if isinstance(response, Exception):
                     raise response
                 if (
@@ -903,6 +903,25 @@ class Proxy(EngineClient):
             ) from e
         finally:
             self.queues.pop(request_id, None)
+
+    async def _await_with_timeout(
+        self,
+        request_id: str,
+        q: asyncio.Queue[Union[Exception, GenerationResponse]],
+    ) -> Union[Exception, GenerationResponse]:
+        """wait for response from queue with timeout handling."""
+        try:
+            resp = await asyncio.wait_for(
+                q.get(),
+                timeout=lm_service_envs.LM_SERVICE_REQUEST_TIMEOUT_SECONDS,
+            )
+            return resp
+        except asyncio.TimeoutError:
+            return RuntimeError(
+                f"Request {request_id} timed out "
+                f"after {lm_service_envs.LM_SERVICE_REQUEST_TIMEOUT_SECONDS}s "
+                f"without worker response."
+            )
 
     async def start_profile(self) -> None:
         raise NotImplementedError
