@@ -21,12 +21,12 @@ logger = init_logger(__name__)
 
 class DisaggWorkerStatsLogger(StatLoggerBase):
     _LOCK: ClassVar[threading.Lock] = threading.Lock()
-    # { engine_addr: { key: {"latest": float, "overall": float}, ... } }
+    # { engine_idx: { key: {"latest": float, "overall": float}, ... } }
     SNAPSHOTS_AVG: ClassVar[
-        dict[str, dict[str, dict[str, Union[str, int, float]]]]
+        dict[int, dict[str, dict[str, Union[int, float]]]]
     ] = {}
 
-    def __init__(self, vllm_config: VllmConfig, engine_addr: str = "0"):
+    def __init__(self, vllm_config: VllmConfig, engine_idx: int = 0):
         self.EPD_STATS_KEYS = [
             "e2e_time_requests",
             "queue_time_requests",
@@ -40,7 +40,7 @@ class DisaggWorkerStatsLogger(StatLoggerBase):
             "prefill_time",
             "mean_time_per_output_token",
         ]
-        self.engine_addr = engine_addr
+        self.engine_index = engine_idx
         self.vllm_config = vllm_config
         self.last_scheduler_stats = SchedulerStats()
         self.last_prompt_throughput: float = 0.0
@@ -54,7 +54,7 @@ class DisaggWorkerStatsLogger(StatLoggerBase):
             key: {"latest": [0, 0.0], "overall": [0, 0.0]}
             for key in self.EPD_STATS_KEYS
         }
-        self.stats_dict_avg: dict[str, dict[str, Union[str, int, float]]] = (
+        self.stats_dict_avg: dict[str, dict[str, Union[int, float]]] = (
             defaultdict(dict)
         )
         """
@@ -95,7 +95,7 @@ class DisaggWorkerStatsLogger(StatLoggerBase):
         self,
         scheduler_stats: Optional[SchedulerStats],
         iteration_stats: Optional[IterationStats],
-        engine_addr: str = "0",
+        engine_idx: int = 0,
     ):
         """Log Stats to standard output."""
         if iteration_stats:
@@ -146,16 +146,16 @@ class DisaggWorkerStatsLogger(StatLoggerBase):
                 }
                 for key in self.EPD_STATS_KEYS
             }
-            self.__class__.SNAPSHOTS_AVG[self.engine_addr] = snapshot
+            self.__class__.SNAPSHOTS_AVG[self.engine_index] = snapshot
 
-        log_msg = "Engine %s: " + ", ".join(
+        log_msg = "Engine %d: " + ", ".join(
             [
                 f"Avg {key.replace('_', ' ')}: %.3f ms"
                 for key in self.EPD_STATS_KEYS
             ]
         )
 
-        log_args = [self.engine_addr] + [
+        log_args = [self.engine_index] + [
             self.stats_dict_avg[key]["latest"] for key in self.EPD_STATS_KEYS
         ]
         log_fn(log_msg, *log_args)
@@ -166,19 +166,19 @@ class DisaggWorkerStatsLogger(StatLoggerBase):
     @classmethod
     def get_stats_snapshot_avg(
         cls,
-    ) -> dict[str, dict[str, Union[str, int, float]]]:
+    ) -> dict[int, dict[str, Union[int, float]]]:
         """
         return:
         {
-          "0": {"engine_addr": "0", "e2e_time_requests": ..., ...},
-          "1": {...},
+          0: {"engine_idx": 0, "e2e_time_requests": ..., ...},
+          1: {...},
         }
         """
         with cls._LOCK:
             snapshot = {}
-            for addr, stats in cls.SNAPSHOTS_AVG.items():
-                snapshot[addr] = {
-                    "engine_addr": addr,
+            for idx, stats in cls.SNAPSHOTS_AVG.items():
+                snapshot[idx] = {
+                    "engine_idx": idx,
                     **{key: stats[key]["overall"] for key in stats},
                 }
             return snapshot
@@ -209,9 +209,9 @@ class DisaggWorkerStatsLogger(StatLoggerBase):
     def log_engine_initialized(self):
         if self.vllm_config.cache_config.num_gpu_blocks:
             logger.info(
-                "Engine %s: vllm cache_config_info with initialization "
+                "Engine %03d: vllm cache_config_info with initialization "
                 "after num_gpu_blocks is: %d",
-                self.engine_addr,
+                self.engine_index,
                 self.vllm_config.cache_config.num_gpu_blocks,
             )
 
@@ -234,11 +234,6 @@ class MetricsReporter:
         )
 
     def get_avg_proxy_to_instance_time(self, work_addr: str) -> float:
-        if work_addr not in self.proxy_to_instance_time_count:
-            logger.warning(
-                "work_addr %s not in proxy_to_instance_time_count", work_addr
-            )
-            return 0.0
         return (
             self.proxy_to_instance_time_total[work_addr]
             / self.proxy_to_instance_time_count[work_addr]
@@ -303,5 +298,5 @@ class MetricsReporter:
                     else result,
                 )
         logger.info("Metrics for %s instances:" % self.server_type)
-        for work_addr, metric in metrics.items():
+        for metric in metrics.values():
             logger.info(metric)

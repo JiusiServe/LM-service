@@ -246,7 +246,7 @@ class DisaggWorker:
         await self._handle_response(req, msg)
 
     async def _metrics_handler(self, req: MetricsRequest):
-        stats_logger: Optional[dict[str, dict[str, Union[str, int, float]]]] = (
+        stats_logger: Optional[dict[int, dict[str, Union[int, float]]]] = (
             DisaggWorkerStatsLogger.get_stats_snapshot_avg()
         )
         msg = (

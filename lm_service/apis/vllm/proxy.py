@@ -849,7 +849,6 @@ class Proxy(EngineClient):
             if (
                 isinstance(response, MetricsResponse)
                 and response.metrics is not None
-                and addr in response.metrics
             ):
                 # calculate proxy to pd/encode time average
                 # add to metrics
@@ -858,37 +857,31 @@ class Proxy(EngineClient):
                         addr
                     )
                 )
-                if self.is_pd_merged:
-                    proxy2pd_avg = (
-                        self.pd_metrics_logger.get_avg_proxy_to_instance_time(
+                for engine_id in response.metrics:
+                    if self.is_pd_merged:
+                        proxy2pd_avg = self.pd_metrics_logger.get_avg_proxy_to_instance_time(
                             addr
                         )
-                    )
-                    response.metrics[addr].update(
-                        {
-                            "proxy_to_encode_time_avg": proxy2encode_avg,
-                            "proxy_to_pd_time_avg": proxy2pd_avg,
-                        }
-                    )
-
-                else:
-                    proxy2p_avg = (
-                        self.p_metrics_logger.get_avg_proxy_to_instance_time(
+                        response.metrics[engine_id].update(
+                            {
+                                "proxy_to_encode_time_avg": proxy2encode_avg,
+                                "proxy_to_pd_time_avg": proxy2pd_avg,
+                            }
+                        )
+                    else:
+                        proxy2p_avg = self.p_metrics_logger.get_avg_proxy_to_instance_time(
                             addr
                         )
-                    )
-                    proxy2d_avg = (
-                        self.d_metrics_logger.get_avg_proxy_to_instance_time(
+                        proxy2d_avg = self.d_metrics_logger.get_avg_proxy_to_instance_time(
                             addr
                         )
-                    )
-                    response.metrics[addr].update(
-                        {
-                            "proxy_to_encode_time_avg": proxy2encode_avg,
-                            "proxy_to_p_time_avg": proxy2p_avg,
-                            "proxy_to_d_time_avg": proxy2d_avg,
-                        }
-                    )
+                        response.metrics[engine_id].update(
+                            {
+                                "proxy_to_encode_time_avg": proxy2encode_avg,
+                                "proxy_to_p_time_avg": proxy2p_avg,
+                                "proxy_to_d_time_avg": proxy2d_avg,
+                            }
+                        )
 
                 return response.metrics
             elif isinstance(response, Exception):
