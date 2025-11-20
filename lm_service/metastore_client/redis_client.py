@@ -112,12 +112,15 @@ class RedisMetastoreClient(MetastoreClientBase):
         self._initialize_clients()
         if self.redis_client is None or self.async_redis_client is None:
             raise RuntimeError("Redis client initialization failed")
-        self.async_task: Optional[asyncio.Task] = []
+        self.async_task: list[asyncio.Task] = []
         # Start a task to save metadata asynchronously without blocking initialization
         self.async_task.append(
             asyncio.create_task(
                 self.save_metadata_async(self.node_key, self.node_info, "0")
             )
+        )
+        logger.info(
+            f"Redis client initialized with host={self.host}, port={self.port}, password={'***' if self.password else 'None'}"
         )
         logger.info(
             f"Node {self.node_info} registered to Redis key {self.node_key}"
@@ -234,7 +237,7 @@ class RedisMetastoreClient(MetastoreClientBase):
                 f"Waiting for {pd_node_key}, {p_node_key}, {d_node_key} timeout, "
                 f"Use the default PD merge deployment mode"
             )
-            return False
+            return True
         except Exception as e:
             logger.error(f"Failed to get deploy form from Redis: {str(e)}")
             return False

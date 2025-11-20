@@ -18,15 +18,24 @@ class MetastoreClientBase(ABC):
         metastore_client_config: Optional[MetastoreClientConfig] = None,
         node_info: str = "",
         engine_type: Optional[int] = None,
-        to_proxy: dict[str, zmq.asyncio.Socket] = {},
-        to_encode_sockets: dict[str, zmq.asyncio.Socket] = {},
-        to_pd_sockets: dict[str, zmq.asyncio.Socket] = {},
-        to_p_sockets: dict[str, zmq.asyncio.Socket] = {},
-        to_d_sockets: dict[str, zmq.asyncio.Socket] = {},
+        to_proxy: Optional[dict[str, zmq.asyncio.Socket]] = None,
+        to_encode_sockets: Optional[dict[str, zmq.asyncio.Socket]] = None,
+        to_pd_sockets: Optional[dict[str, zmq.asyncio.Socket]] = None,
+        to_p_sockets: Optional[dict[str, zmq.asyncio.Socket]] = None,
+        to_d_sockets: Optional[dict[str, zmq.asyncio.Socket]] = None,
         *args,
         **kwargs,
     ):
-        pass
+        if to_proxy is None:
+            to_proxy = {}
+        if to_encode_sockets is None:
+            to_encode_sockets = {}
+        if to_pd_sockets is None:
+            to_pd_sockets = {}
+        if to_p_sockets is None:
+            to_p_sockets = {}
+        if to_d_sockets is None:
+            to_d_sockets = {}
 
     def save_metadata(self, key: str, field: str, value: Any) -> Optional[bool]:
         """
