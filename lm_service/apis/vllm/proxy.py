@@ -185,12 +185,9 @@ class Proxy(EngineClient):
                 addr_param_name = SERVER_PARAMS_MAP[server_type][
                     "addr_list_name"
                 ]
-                addr_list = init_params[str(addr_param_name)]
-                if addr_list is None:
-                    continue
-
                 addr_list = [
-                    f"{self.transfer_protocol}://{addr}" for addr in addr_list
+                    f"{self.transfer_protocol}://{addr}"
+                    for addr in init_params[str(addr_param_name)]
                 ]
                 sockets = self.connect_to_socket(addr_list)
             else:
@@ -519,7 +516,7 @@ class Proxy(EngineClient):
             ResponseType.HEARTBEAT: heartbeat_decoder,
             ResponseType.FAILURE: failure_decoder,
             ResponseType.METRICS: metrics_decoder,
-            ResponseType.REGISTER: worker_register_decoder,
+            RequestType.REGISTER: worker_register_decoder,
         }
 
         timeout = self.health_check_interval * self.health_threshold / 2
@@ -544,11 +541,12 @@ class Proxy(EngineClient):
 
                 # ---- receive and decode ----
                 resp_type, payload = await socket.recv_multipart()
-                decoder = resp_type_decoder_map.get(resp_type)
+                decoder = resp_type_decoder_map[resp_type]
                 if decoder is None:
                     raise RuntimeError(
                         f"Unknown response type from worker: {resp_type.decode()}"
                     )
+
                 # Decode response according to its type.
                 # TODO : judge whether we need to add PREFILL response type
                 resp: Union[
@@ -558,7 +556,6 @@ class Proxy(EngineClient):
                     MetricsResponse,
                     WorkerRegisterRequest,
                 ]
-
                 resp = decoder.decode(payload)
                 if resp_type == RequestType.REGISTER:
                     asyncio.create_task(self._worker_register_handler(resp))

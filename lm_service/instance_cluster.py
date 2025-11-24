@@ -15,22 +15,18 @@ SERVER_PARAMS_MAP = {
     ServerType.E_INSTANCE: {
         "addr_list_name": "encode_addr_list",
         "run_request_type": RequestType.ENCODE,
-        "socket_dict_name": "to_encode_sockets",
     },
     ServerType.P_INSTANCE: {
         "addr_list_name": "p_addr_list",
         "run_request_type": RequestType.PREFILL,
-        "socket_dict_name": "to_p_sockets",
     },
     ServerType.D_INSTANCE: {
         "addr_list_name": "d_addr_list",
         "run_request_type": RequestType.GENERATION,
-        "socket_dict_name": "to_d_sockets",
     },
     ServerType.PD_INSTANCE: {
         "addr_list_name": "pd_addr_list",
         "run_request_type": RequestType.GENERATION,
-        "socket_dict_name": "to_pd_sockets",
     },
 }
 
