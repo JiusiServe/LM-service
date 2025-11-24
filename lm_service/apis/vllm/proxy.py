@@ -88,7 +88,6 @@ class Proxy(EngineClient):
         transfer_protocol: Optional[str] = None,
         metastore_client_config: Optional[dict] = None,
     ):
-        init_params = locals()
         self.instance_clusters: dict[ServerType, InstanceCluster] = {}
         self.queues: dict[str, asyncio.Queue] = {}
         # This "Encoder" is used for handling message types, not for "Encode - Prefill - Decode"
@@ -104,7 +103,6 @@ class Proxy(EngineClient):
         self.router = router
         self.is_pd_merged = True
 
-        ipv6_connected = False
         # Dummy: needed for EngineClient Protocol.
         self.model_config = ModelConfig(
             model=model_name,
@@ -115,10 +113,25 @@ class Proxy(EngineClient):
             task="generate",
             seed=42,
         )
-        if (
+
+        use_engine_client = (
             metastore_client_config is not None
             or lm_service_envs.LM_SERVICE_METASTORE_CLIENT is not None
-        ):
+        )
+
+        self.to_encode_sockets: dict[str, zmq.asyncio.Socket] = {}
+        self.to_pd_sockets: dict[str, zmq.asyncio.Socket] = {}
+        self.to_p_sockets: dict[str, zmq.asyncio.Socket] = {}
+        self.to_d_sockets: dict[str, zmq.asyncio.Socket] = {}
+
+        self.server_to_socket_map = {
+            ServerType.E_INSTANCE: self.to_encode_sockets,
+            ServerType.PD_INSTANCE: self.to_pd_sockets,
+            ServerType.P_INSTANCE: self.to_p_sockets,
+            ServerType.D_INSTANCE: self.to_d_sockets,
+        }
+
+        if use_engine_client:
             config: MetastoreClientConfig = json_to_metastore_config(
                 metastore_client_config
             )
@@ -132,7 +145,6 @@ class Proxy(EngineClient):
             self.proxy_addr = f"{self.transfer_protocol}://{proxy_addr}"
             if is_addr_ipv6(proxy_addr) and self.transfer_protocol == "tcp":
                 self.ctx.setsockopt(zmq.constants.IPV6, 1)
-                ipv6_connected = True
             self.metastore_client = (
                 MetastoreClientFactory.create_metastore_client(
                     config=config,
@@ -153,25 +165,36 @@ class Proxy(EngineClient):
                 p_addr_list=p_addr_list,
                 d_addr_list=d_addr_list,
             )
+            self.proxy_addr = f"{self.transfer_protocol}://{proxy_addr}"
+            if is_addr_ipv6(proxy_addr) and self.transfer_protocol == "tcp":
+                self.ctx.setsockopt(zmq.constants.IPV6, 1)
 
-        self.proxy_addr = f"{self.transfer_protocol}://{proxy_addr}"
-        if (
-            is_addr_ipv6(proxy_addr)
-            and self.transfer_protocol == "tcp"
-            and not ipv6_connected
-        ):
-            self.ctx.setsockopt(zmq.constants.IPV6, 1)
+        # Using the is_pd_merged as the only key to determine which instance cluster to initialize
+        init_params = locals()
+        active_types = (
+            {ServerType.E_INSTANCE, ServerType.PD_INSTANCE}
+            if self.is_pd_merged
+            else {
+                ServerType.E_INSTANCE,
+                ServerType.P_INSTANCE,
+                ServerType.D_INSTANCE,
+            }
+        )
+        for server_type in active_types:
+            if not use_engine_client:
+                addr_param_name = SERVER_PARAMS_MAP[server_type][
+                    "addr_list_name"
+                ]
+                addr_list = init_params[str(addr_param_name)]
+                if addr_list is None:
+                    continue
 
-        for server_type in SERVER_PARAMS_MAP:
-            addr_param_name = SERVER_PARAMS_MAP[server_type]["addr_list_name"]
-            addr_list = init_params[str(addr_param_name)]
-            if addr_list is None:
-                continue
-
-            addr_list = [
-                f"{self.transfer_protocol}://{addr}" for addr in addr_list
-            ]
-            sockets = self.connect_to_socket(addr_list)
+                addr_list = [
+                    f"{self.transfer_protocol}://{addr}" for addr in addr_list
+                ]
+                sockets = self.connect_to_socket(addr_list)
+            else:
+                sockets = self.server_to_socket_map[server_type]
             self._initialize_instance_clusters(server_type, sockets)
 
     def _validate_input_addr_and_judge_pd_merged(
@@ -453,14 +476,8 @@ class Proxy(EngineClient):
         address = worker_register_req.address
         server_type = worker_register_req.server_type
 
-        SERVER_TYPE_TO_SOCKET_MAP = {
-            ServerType.E_INSTANCE: self.to_encode_sockets,
-            ServerType.PD_INSTANCE: self.to_pd_sockets,
-            ServerType.P_INSTANCE: self.to_p_sockets,
-            ServerType.D_INSTANCE: self.to_d_sockets,
-        }
-        if server_type in SERVER_TYPE_TO_SOCKET_MAP:
-            socket_dict = SERVER_TYPE_TO_SOCKET_MAP[server_type]
+        if server_type in self.server_to_socket_map:
+            socket_dict = self.server_to_socket_map[server_type]
             if address not in socket_dict:
                 try:
                     socket = self.ctx.socket(zmq.constants.PUSH)
@@ -502,6 +519,7 @@ class Proxy(EngineClient):
             ResponseType.HEARTBEAT: heartbeat_decoder,
             ResponseType.FAILURE: failure_decoder,
             ResponseType.METRICS: metrics_decoder,
+            ResponseType.REGISTER: worker_register_decoder,
         }
 
         timeout = self.health_check_interval * self.health_threshold / 2
@@ -540,10 +558,9 @@ class Proxy(EngineClient):
                     MetricsResponse,
                     WorkerRegisterRequest,
                 ]
-                    resp = worker_register_decoder.decode(payload)
 
                 resp = decoder.decode(payload)
-                if resp_type == WorkerRegisterRequest:
+                if resp_type == RequestType.REGISTER:
                     asyncio.create_task(self._worker_register_handler(resp))
                 if resp.request_id not in self.queues:
                     if resp_type not in (

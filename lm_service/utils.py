@@ -3,7 +3,7 @@
 import regex as re
 
 
-def is_addr_ipv6(addr: str) -> bool:
+def is_addr_ipv6(addr: str | None) -> bool:
     """
     Check if the given address is an IPv6 address
 
@@ -13,5 +13,7 @@ def is_addr_ipv6(addr: str) -> bool:
     Returns:
         bool: True if the address is an IPv6 address, False otherwise
     """
+    if addr is None:
+        raise RuntimeError("addr must not be None. ")
     ipv6_pattern = r"^\[(.*?)\]:(\d+)$"
     return bool(re.match(ipv6_pattern, addr))
