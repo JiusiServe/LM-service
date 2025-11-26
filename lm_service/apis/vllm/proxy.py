@@ -130,7 +130,7 @@ class Proxy(EngineClient):
             config: MetastoreClientConfig = json_to_metastore_config(
                 metastore_client_config
             )
-            local_ip = get_ip()
+            local_ip = lm_service_envs.LM_SERVICE_HOST_IP or get_ip()
             proxy_port = (
                 int(lm_service_envs.LM_SERVICE_RPC_PORT)
                 if lm_service_envs.LM_SERVICE_RPC_PORT
@@ -276,6 +276,7 @@ class Proxy(EngineClient):
         )
         if self.transfer_protocol == "ipc" and os.path.exists(socket_path):
             os.remove(socket_path)
+        self.metastore_client.close()
 
     async def log_metrics(self) -> None:
         if self.is_pd_merged:

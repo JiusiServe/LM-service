@@ -77,7 +77,7 @@ class DisaggWorker:
             config: MetastoreClientConfig = json_to_metastore_config(
                 metastore_client_config
             )
-            worker_ip = get_ip()
+            worker_ip = lm_service_envs.LM_SERVICE_HOST_IP or get_ip()
             worker_port = (
                 int(lm_service_envs.LM_SERVICE_RPC_PORT)
                 if lm_service_envs.LM_SERVICE_RPC_PORT
@@ -148,6 +148,7 @@ class DisaggWorker:
         )
         if self.transfer_protocol == "ipc" and os.path.exists(socket_path):
             os.remove(socket_path)
+        self.metastore_client.close()
 
     def get_server_type(self) -> ServerType:
         if (
