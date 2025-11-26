@@ -49,6 +49,9 @@ import lm_service.envs as lm_service_envs
 from lm_service.metastore_client.factory import (
     MetastoreClientFactory,
 )
+from lm_service.metastore_client.metastore_client import (
+    MetastoreClientBase,
+)
 from lm_service.metastore_client.metastore_client_config import (
     MetastoreClientConfig,
     json_to_metastore_config,
@@ -110,6 +113,7 @@ class Proxy(EngineClient):
         self.health_check_interval = health_check_interval
         self.health_threshold = health_threshold
         self.output_handler: Optional[asyncio.Task] = None
+        self.metastore_client: Optional[MetastoreClientBase] = None
         self.router = router
         self.is_pd_merged = True
 
@@ -276,7 +280,9 @@ class Proxy(EngineClient):
         )
         if self.transfer_protocol == "ipc" and os.path.exists(socket_path):
             os.remove(socket_path)
-        self.metastore_client.close()
+
+        if self.metastore_client is not None:
+            self.metastore_client.close()
 
     async def log_metrics(self) -> None:
         if self.is_pd_merged:
