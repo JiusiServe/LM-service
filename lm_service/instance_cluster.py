@@ -75,7 +75,7 @@ class InstanceCluster:
 
         return msg
 
-    async def run_with_stream(self, request, q):
+    async def process_request_streaming_response(self, request, q):
         msg = self._prepare_msg(request)
         async with self.socket_lock:
             health_endpoints = self._get_health_endpoints()
@@ -107,7 +107,7 @@ class InstanceCluster:
                 addr, request_id=request.request_id
             )
 
-    async def run_without_stream(self, request, q):
+    async def process_request(self, request, q):
         msg = self._prepare_msg(request)
         async with self.socket_lock:
             health_endpoints = self._get_health_endpoints()
@@ -165,8 +165,8 @@ class InstanceCluster:
                 f"without worker response."
             )
 
-    def get_metrics(self):
-        return self.metrics_logger.get_metrics()
+    async def get_metrics(self):
+        await self.metrics_logger.get_metrics()
 
     def _get_health_endpoints(self):
         return self.service_discovery.get_health_endpoints()

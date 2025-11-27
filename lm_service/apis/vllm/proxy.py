@@ -123,7 +123,7 @@ class Proxy(EngineClient):
             seed=42,
         )
 
-        use_engine_client = (
+        use_metastore = (
             metastore_client_config is not None
             or lm_service_envs.LM_SERVICE_METASTORE_CLIENT is not None
         )
@@ -135,7 +135,7 @@ class Proxy(EngineClient):
             ServerType.D_INSTANCE: self.to_d_sockets,
         }
 
-        if use_engine_client:
+        if use_metastore:
             config: MetastoreClientConfig = json_to_metastore_config(
                 metastore_client_config
             )
@@ -185,7 +185,7 @@ class Proxy(EngineClient):
             }
         )
         for server_type in active_types:
-            if not use_engine_client:
+            if not use_metastore:
                 addr_param_name = SERVER_PARAMS_MAP[server_type][
                     "addr_list_name"
                 ]
@@ -278,13 +278,9 @@ class Proxy(EngineClient):
             self.metastore_client.close()
 
     async def log_metrics(self) -> None:
-        if self.is_pd_merged:
-            await self.instance_clusters[ServerType.PD_INSTANCE].get_metrics()
-        else:
-            await self.instance_clusters[ServerType.P_INSTANCE].get_metrics()
-            await self.instance_clusters[ServerType.D_INSTANCE].get_metrics()
-
-        await self.instance_clusters[ServerType.E_INSTANCE].get_metrics()
+        for server_type in self.instance_clusters:
+            cluster = self.instance_clusters[server_type]
+            await cluster.get_metrics()
 
     def connect_to_socket(
         self, addr_list: list[str]
@@ -306,23 +302,25 @@ class Proxy(EngineClient):
             logger.info(f"Connected to worker {addr} success")
         return to_sockets
 
-    async def _run_without_stream(
+    async def _process_request(
         self,
         server_type: ServerType,
         request: GenerationRequest,
         q: asyncio.Queue[Union[Exception, GenerationResponse]],
     ):
         cluster = self.instance_clusters[server_type]
-        await cluster.run_without_stream(request, q)
+        await cluster.process_request(request, q)
 
-    async def _run_with_stream(
+    async def _process_request_streaming_response(
         self,
         server_type: ServerType,
         request: GenerationRequest,
         q: asyncio.Queue[Union[Exception, GenerationResponse]],
     ):
         cluster = self.instance_clusters[server_type]
-        async for resp in cluster.run_with_stream(request, q):
+        async for resp in cluster.process_request_streaming_response(
+            request, q
+        ):
             yield resp
 
     def _to_request_output(self, resp: GenerationResponse) -> RequestOutput:
@@ -402,13 +400,13 @@ class Proxy(EngineClient):
                 request.multi_modal_data = _encode_mm_data(
                     prompt["multi_modal_data"]
                 )
-                await self._run_without_stream(
-                    ServerType.E_INSTANCE, request, q
-                )
+                await self._process_request(ServerType.E_INSTANCE, request, q)
 
             if self.is_pd_merged:
                 pd_cluster = self.instance_clusters[ServerType.PD_INSTANCE]
-                async for pd_response in self._run_with_stream(
+                async for (
+                    pd_response
+                ) in self._process_request_streaming_response(
                     ServerType.PD_INSTANCE, request, q
                 ):
                     yield self._to_request_output(pd_response)
@@ -418,11 +416,11 @@ class Proxy(EngineClient):
                         pd_response,
                     )
             else:
-                await self._run_without_stream(
-                    ServerType.P_INSTANCE, request, q
-                )
+                await self._process_request(ServerType.P_INSTANCE, request, q)
                 d_cluster = self.instance_clusters[ServerType.D_INSTANCE]
-                async for d_response in self._run_with_stream(
+                async for (
+                    d_response
+                ) in self._process_request_streaming_response(
                     ServerType.D_INSTANCE, request, q
                 ):
                     yield self._to_request_output(d_response)
