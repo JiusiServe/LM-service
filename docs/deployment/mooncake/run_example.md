@@ -4,14 +4,13 @@
 
 Software
 
-```
+```bash
   * Python >= 3.9, < 3.12
   * CANN >= 8.3.rc1
   * PyTorch == 2.7.1, torch-npu == 2.7.1
   * vLLM：v0.11.0 branch
   * vLLM-Ascend：v0.11.0 branch
 ```  
-
 
 Mooncake 目前使用 JiusiServe 仓 v6_support_v0.3.7.post2 分支，依赖的 yalantinglibs 组件，目前使用 main 分支。
 
@@ -174,12 +173,19 @@ mooncake_master
 ```
 
 各个参数的含义如下
+
 - `local_hostname`表示本机的IP:Port或者可访问的域名（若不含端口则使用默认值）
+
 - `enable_http_metadata_server`为true表示开启http元数据服务
+
 - `http_metadata_server_host`指定HTTP元数据服务器绑定的主机地址。使用`"0.0.0.0"`可监听所有的可用网络接口，或指定特定IP
+
 - `http_metadata_server_host`指定HTTP元数据服务器监听的TCP端口。该端口不可与其他服务冲突。
+
 - `metrics_port`指定master通过HTTP暴露的Prometheus风格的监控指标。
+
 - 根据可用的CPU核心数和工作负载，调整`rpc_thread_num`.
+
 - 根据内存压力和对象更替情况调整`eviction_high_watermark_ratio`和`eviction_ratio`。
 
 使用IPV6启动Mooncake Master
@@ -209,7 +215,9 @@ mooncake_master
 - 可通过设置`--default_kv_lease_ttl"自定义租约超时时间，默认值为5000，单位为ms。
 
 ## 配置VLLM参数使用Mooncake Connector
+
 ### 使用EC Connector
+
 ### 1E1PD Encoder实例示例
 
 - 使用ipv4时，启动模型时添加如下配置
@@ -285,6 +293,7 @@ $MOONCAKE_METADATA_IP和$MOONCAKE_METADATA_PORT为元数据服务所在节点IP�
 ```
 
 ### 使用EC connector和KV connector
+
 ### 1E1P1D Encoder实例
 
 - 使用ipv4时，启动模型时添加如下配置
