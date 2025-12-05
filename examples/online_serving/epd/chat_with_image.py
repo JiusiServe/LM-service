@@ -90,6 +90,7 @@ async def main():
         metastore_client_config=args.metastore_client_config,
     )
     try:
+        await p.start_output_handler_once()
         # The current prompt format follows Qwen2.5-VL-3B-Instruct.
         # You may need to adjust it if using a different model.
         prompt = (

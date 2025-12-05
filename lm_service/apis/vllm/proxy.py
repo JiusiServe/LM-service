@@ -4,6 +4,7 @@
 import asyncio
 import os
 import time
+from PIL import Image
 import uuid
 from collections.abc import AsyncGenerator, Mapping
 from typing import Any, Optional, Union
@@ -20,7 +21,11 @@ from vllm.lora.request import LoRARequest
 from vllm.outputs import CompletionOutput, PoolingRequestOutput, RequestOutput
 from vllm.pooling_params import PoolingParams
 from vllm.sampling_params import SamplingParams
-from vllm.transformers_utils.tokenizer import AnyTokenizer
+from vllm.transformers_utils.tokenizer import (
+    AnyTokenizer,
+    init_tokenizer_from_configs,
+)
+from vllm.tasks import SupportedTask
 from vllm.utils import Device, get_ip, get_open_port
 from lm_service.protocol.protocol import (
     ExitRequest,
@@ -78,6 +83,7 @@ class Proxy(EngineClient):
 
     def __init__(
         self,
+        vllm_config: Optional[VllmConfig] = None,
         proxy_addr: Optional[str] = None,
         encode_addr_list: Optional[list[str]] = None,
         pd_addr_list: Optional[list[str]] = None,
@@ -91,6 +97,7 @@ class Proxy(EngineClient):
         transfer_protocol: Optional[str] = None,
         metastore_client_config: Optional[dict] = None,
     ):
+        self.vllm_config = vllm_config
         self._check_type("enable_health_monitor", enable_health_monitor, bool)
         self._check_positive("health_check_interval", health_check_interval)
         self._check_positive("health_threshold", health_threshold)
@@ -116,7 +123,11 @@ class Proxy(EngineClient):
         self.metastore_client: Optional[MetastoreClientBase] = None
         self.router = router
         self.is_pd_merged = True
-
+        self.tokenizer = (
+            init_tokenizer_from_configs(model_config=vllm_config.model_config)
+            if vllm_config
+            else None
+        )
         # Dummy: needed for EngineClient Protocol.
         self.model_config = ModelConfig(
             model=model_name,
@@ -268,6 +279,13 @@ class Proxy(EngineClient):
             socket_lock=lock,
         )
 
+    # initialization of output handler
+    async def start_output_handler_once(self) -> None:
+        if self.output_handler is None:
+            self.output_handler = asyncio.create_task(
+                self._run_output_handler()
+            )
+
     def shutdown(self):
         self.ctx.destroy()
         if (task := self.output_handler) is not None:
@@ -365,12 +383,6 @@ class Proxy(EngineClient):
         trace_headers: Optional[Mapping[str, str]] = None,
         priority: int = 0,
     ):
-        # lazy initialization
-        if self.output_handler is None:
-            self.output_handler = asyncio.create_task(
-                self._run_output_handler()
-            )
-
         # lazy init all health monitors
         for cluster in self.instance_clusters.values():
             cluster.lazy_init_health_monitor()
@@ -385,7 +397,12 @@ class Proxy(EngineClient):
             self.queues[request_id] = q
 
         # Support both raw string prompts and dict prompts with multimodal data
-        prompt_text = prompt["prompt"] if isinstance(prompt, dict) else prompt
+        if "prompt_token_ids" in prompt and self.tokenizer:
+            prompt_text = self.tokenizer.decode(prompt["prompt_token_ids"])
+        else:
+            prompt_text = (
+                prompt["prompt"] if isinstance(prompt, dict) else prompt
+            )
 
         request = GenerationRequest(
             request_id=request_id,
@@ -630,7 +647,10 @@ class Proxy(EngineClient):
         raise NotImplementedError
 
     async def get_tokenizer(self) -> AnyTokenizer:
-        raise NotImplementedError
+        if self.tokenizer is None:
+            raise ValueError("Unable to get tokenizer")
+
+        return self.tokenizer
 
     async def is_tracing_enabled(self) -> bool:
         return False
@@ -639,11 +659,6 @@ class Proxy(EngineClient):
         pass
 
     async def check_health(self, server_type: ServerType, addr: str):
-        # lazy initialization
-        if self.output_handler is None:
-            self.output_handler = asyncio.create_task(
-                self._run_output_handler()
-            )
         request_id = str(uuid.uuid4())
         request = HeartbeatRequest(
             request_id=request_id, proxy_addr=self.proxy_addr
@@ -730,11 +745,6 @@ class Proxy(EngineClient):
             self.queues.pop(request_id, None)
 
     async def handle_exit_from_worker(self, req: ExitRequest) -> None:
-        # lazy initialization
-        if self.output_handler is None:
-            self.output_handler = asyncio.create_task(
-                self._run_output_handler()
-            )
         server_type = req.server_type
 
         # stop routing new requests to it
@@ -801,6 +811,9 @@ class Proxy(EngineClient):
     async def reset_mm_cache(self) -> None:
         raise NotImplementedError
 
+    async def get_supported_tasks(self) -> tuple[SupportedTask, ...]:
+        return ("generate",)
+
     async def _get_socket_and_server_types_from_addr(
         self,
         addr: str,
@@ -862,5 +875,19 @@ def _encode_mm_data(mm_data: dict[str, Any]) -> dict[str, Any]:
                 "shape": img.shape,
                 "dtype": str(img.dtype),
             }
-            encoded_images.append(encoded_img)
+        elif isinstance(img, Image.Image):
+            # Convert PIL Image to numpy array
+            arr = np.array(img)
+            encoded_img = {
+                "type": "ndarray",
+                "data": arr.tobytes(),
+                "shape": arr.shape,
+                "dtype": str(arr.dtype),
+            }
+        else:
+            raise ValueError(
+                f"Unsupported image type: {type(img)}. "
+                "Supported types are numpy.ndarray and PIL.Image.Image."
+            )
+        encoded_images.append(encoded_img)
     return {"image": encoded_images}
