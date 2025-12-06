@@ -77,13 +77,14 @@ class DisaggWorker:
             config: MetastoreClientConfig = json_to_metastore_config(
                 metastore_client_config
             )
-            worker_ip = lm_service_envs.LM_SERVICE_HOST_IP or get_ip()
-            worker_port = (
-                int(lm_service_envs.LM_SERVICE_RPC_PORT)
-                if lm_service_envs.LM_SERVICE_RPC_PORT
-                else get_open_port()
-            )
-            address = f"{worker_ip}:{worker_port}"
+            if address is None:
+                worker_ip = lm_service_envs.LM_SERVICE_HOST_IP or get_ip()
+                worker_port = (
+                    int(lm_service_envs.LM_SERVICE_RPC_PORT)
+                    if lm_service_envs.LM_SERVICE_RPC_PORT
+                    else get_open_port()
+                )
+                address = f"{worker_ip}:{worker_port}"
             self.worker_addr = f"{self.transfer_protocol}://{address}"
             self.ctx = zmq.asyncio.Context()
             if is_addr_ipv6(address) and self.transfer_protocol == "tcp":
@@ -93,7 +94,7 @@ class DisaggWorker:
             self.metastore_client = (
                 MetastoreClientFactory.create_metastore_client(
                     config=config,
-                    engine_type=self.server_type.value,
+                    server_type=self.server_type.value,
                     node_info=self.worker_addr,
                     to_proxy=self.to_proxy,
                 )

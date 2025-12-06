@@ -32,7 +32,7 @@ class RedisMetastoreClient(MetastoreClientBase):
         self,
         metastore_client_config: Optional[MetastoreClientConfig] = None,
         node_info: str = "",
-        engine_type: Optional[int] = None,
+        server_type: Optional[int] = None,
         to_proxy: Optional[dict[str, zmq.asyncio.Socket]] = None,
         to_encode_sockets: Optional[dict[str, zmq.asyncio.Socket]] = None,
         to_pd_sockets: Optional[dict[str, zmq.asyncio.Socket]] = None,
@@ -47,7 +47,7 @@ class RedisMetastoreClient(MetastoreClientBase):
             redis_port: Redis server port
             db: Redis database index
             node_info: Node information string identifier
-            engine_type: Type of the engine instance
+            server_type: Type of the engine instance
             to_proxy: Dictionary of ZMQ sockets for proxy communication
             to_encode_sockets: Dictionary of ZMQ sockets for encoding service communication
             to_pd_sockets: Dictionary of ZMQ sockets for parameter distribution service
@@ -58,7 +58,7 @@ class RedisMetastoreClient(MetastoreClientBase):
         super().__init__(
             metastore_client_config,
             node_info,
-            engine_type,
+            server_type,
             to_proxy,
             to_encode_sockets,
             to_pd_sockets,
@@ -85,7 +85,7 @@ class RedisMetastoreClient(MetastoreClientBase):
             self.ctx.setsockopt(zmq.constants.IPV6, 1)
 
         self.node_key = (
-            f"{lm_service_envs.LM_SERVICE_REDIS_KEY_PREFIX}_{self.engine_type}"
+            f"{lm_service_envs.LM_SERVICE_REDIS_KEY_PREFIX}_{self.server_type}"
         )
         self.server_key = (
             f"{lm_service_envs.LM_SERVICE_REDIS_KEY_PREFIX}_SERVERTYPE"
@@ -93,53 +93,14 @@ class RedisMetastoreClient(MetastoreClientBase):
         self._initialize_clients()
         if self.redis_client is None or self.async_redis_client is None:
             raise RuntimeError("Redis client initialization failed")
-        self.async_task: list[asyncio.Task] = []
-        # Start a task to save metadata asynchronously without blocking initialization
-        self.async_task.append(asyncio.create_task(self._report_node_info()))
-        logger.info(
-            f"Node {self.node_info} registered to Redis key {self.node_key}"
-        )
 
-        interval = lm_service_envs.LM_SERVICE_REDIS_INTERVAL
-        if engine_type == ServerType.PROXY.value:
-            self.async_task.append(
-                asyncio.create_task(
-                    self.async_update_socket(
-                        ServerType.E_INSTANCE.value, interval
-                    )
-                )
-            )
+        self.interval = lm_service_envs.LM_SERVICE_REDIS_INTERVAL
+        self.async_task: list[asyncio.Task] = []
+        if self.server_type != ServerType.PROXY.value:
+            self.launch_worker_task()
+        else:
             self.is_pd_merged = self._get_deploy_form()
             logger.info(f"Deploy form is E-PD: {self.is_pd_merged}")
-            if self.is_pd_merged:
-                self.async_task.append(
-                    asyncio.create_task(
-                        self.async_update_socket(
-                            ServerType.PD_INSTANCE.value, interval
-                        )
-                    )
-                )
-            else:
-                self.async_task.append(
-                    asyncio.create_task(
-                        self.async_update_socket(
-                            ServerType.P_INSTANCE.value, interval
-                        )
-                    )
-                )
-                self.async_task.append(
-                    asyncio.create_task(
-                        self.async_update_socket(
-                            ServerType.D_INSTANCE.value, interval
-                        )
-                    )
-                )
-        else:
-            self.async_task.append(
-                asyncio.create_task(
-                    self.async_update_socket(ServerType.PROXY.value, interval)
-                )
-            )
 
     def _initialize_clients(self):
         """
@@ -162,6 +123,61 @@ class RedisMetastoreClient(MetastoreClientBase):
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Redis client: {str(e)}")
+
+    def launch_worker_task(self):
+        """
+        Launch worker task to report node info and update socket.
+        """
+        self.async_task.append(asyncio.create_task(self._report_node_info()))
+        logger.info(
+            f"Node {self.node_info} registered to Redis key {self.node_key}"
+        )
+        self.async_task.append(
+            asyncio.create_task(
+                self.async_update_socket(ServerType.PROXY.value, self.interval)
+            )
+        )
+
+    def launch_proxy_task(self):
+        """
+        Launch proxy task to report node info and update socket.
+        """
+        self.async_task.append(asyncio.create_task(self._report_node_info()))
+        logger.info(
+            f"Node {self.node_info} registered to Redis key {self.node_key}"
+        )
+
+        self.async_task.append(
+            asyncio.create_task(
+                self.async_update_socket(
+                    ServerType.E_INSTANCE.value, self.interval
+                )
+            )
+        )
+
+        if self.is_pd_merged:
+            self.async_task.append(
+                asyncio.create_task(
+                    self.async_update_socket(
+                        ServerType.PD_INSTANCE.value, self.interval
+                    )
+                )
+            )
+        else:
+            self.async_task.append(
+                asyncio.create_task(
+                    self.async_update_socket(
+                        ServerType.P_INSTANCE.value, self.interval
+                    )
+                )
+            )
+            self.async_task.append(
+                asyncio.create_task(
+                    self.async_update_socket(
+                        ServerType.D_INSTANCE.value, self.interval
+                    )
+                )
+            )
 
     @property
     def is_pd_merge(self):
@@ -186,12 +202,17 @@ class RedisMetastoreClient(MetastoreClientBase):
             for _ in range(retry_times):
                 deploy_form = self.get_metadata(self.server_key)
                 if e_node_key in deploy_form and pd_node_key in deploy_form:
+                    self.update_socket(ServerType.E_INSTANCE.value)
+                    self.update_socket(ServerType.PD_INSTANCE.value)
                     return True
                 elif (
                     e_node_key in deploy_form
                     and p_node_key in deploy_form
                     and d_node_key in deploy_form
                 ):
+                    self.update_socket(ServerType.E_INSTANCE.value)
+                    self.update_socket(ServerType.P_INSTANCE.value)
+                    self.update_socket(ServerType.D_INSTANCE.value)
                     return False
                 time.sleep(1)
             logger.warning(
@@ -451,6 +472,34 @@ class RedisMetastoreClient(MetastoreClientBase):
         current_servers = servers_dict.keys()
         self.connect_to_server(current_servers, self.to_proxy)
 
+    def update_socket(self, server_type: int):
+        """
+        Update socket connections for a given engine type
+
+        Args:
+            server_type: The type of server (proxy, encode, pd, p, d)
+        """
+        if self.async_redis_client is None:
+            logger.error("Redis client not initialized")
+            return
+
+        node_key = (
+            f"{lm_service_envs.LM_SERVICE_REDIS_KEY_PREFIX}_{server_type}"
+        )
+        servers_dict = self.get_metadata(node_key)
+        if servers_dict:
+            logger.debug(f"Retrieved servers from Redis: {servers_dict}")
+            if server_type == ServerType.PROXY.value:
+                self.connect_to_server(servers_dict, self.to_proxy)
+            elif server_type == ServerType.E_INSTANCE.value:
+                self.connect_to_server(servers_dict, self.to_encode_sockets)
+            elif server_type == ServerType.PD_INSTANCE.value:
+                self.connect_to_server(servers_dict, self.to_pd_sockets)
+            elif server_type == ServerType.P_INSTANCE.value:
+                self.connect_to_server(servers_dict, self.to_p_sockets)
+            elif server_type == ServerType.D_INSTANCE.value:
+                self.connect_to_server(servers_dict, self.to_d_sockets)
+
     async def async_update_proxy_sockets(self):
         """
         Asynchronously update proxy sockets
@@ -463,47 +512,17 @@ class RedisMetastoreClient(MetastoreClientBase):
         current_servers = servers_dict.keys()
         self.connect_to_server(current_servers, self.to_proxy)
 
-    async def async_update_socket(self, engine_type: int, interval: int):
+    async def async_update_socket(self, server_type: int, interval: int):
         """
         Asynchronously update socket connections for a given engine type
 
         Args:
-            engine_type: The type of server (proxy, encode, or pd)
+            server_type: The type of server (proxy, encode, or pd)
             interval: Check interval in seconds
         """
         try:
             while True:
-                if self.async_redis_client is None:
-                    logger.error("Redis client not initialized")
-                    return
-                node_key = f"{lm_service_envs.LM_SERVICE_REDIS_KEY_PREFIX}_{engine_type}"
-                servers_dict = self.get_metadata(node_key)
-                if servers_dict:
-                    logger.debug(
-                        f"Retrieved servers from Redis: {servers_dict}"
-                    )
-
-                    # Parse the servers_list string into a list of server info
-                    current_servers = servers_dict.keys()
-                    if engine_type == ServerType.PROXY.value:
-                        self.connect_to_server(current_servers, self.to_proxy)
-                    elif engine_type == ServerType.E_INSTANCE.value:
-                        self.connect_to_server(
-                            current_servers, self.to_encode_sockets
-                        )
-                    elif engine_type == ServerType.PD_INSTANCE.value:
-                        self.connect_to_server(
-                            current_servers, self.to_pd_sockets
-                        )
-                    elif engine_type == ServerType.P_INSTANCE.value:
-                        self.connect_to_server(
-                            current_servers, self.to_p_sockets
-                        )
-                    elif engine_type == ServerType.D_INSTANCE.value:
-                        self.connect_to_server(
-                            current_servers, self.to_d_sockets
-                        )
-
+                self.update_socket(server_type)
                 # Wait for next check interval
                 await asyncio.sleep(interval)
         except asyncio.CancelledError:

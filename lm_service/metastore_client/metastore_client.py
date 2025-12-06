@@ -17,7 +17,7 @@ class MetastoreClientBase(ABC):
         self,
         metastore_client_config: Optional[MetastoreClientConfig] = None,
         node_info: str = "",
-        engine_type: Optional[int] = None,
+        server_type: Optional[int] = None,
         to_proxy: Optional[dict[str, zmq.asyncio.Socket]] = None,
         to_encode_sockets: Optional[dict[str, zmq.asyncio.Socket]] = None,
         to_pd_sockets: Optional[dict[str, zmq.asyncio.Socket]] = None,
@@ -28,7 +28,7 @@ class MetastoreClientBase(ABC):
     ):
         self.metastore_client_config = metastore_client_config
         self.node_info = node_info
-        self.engine_type = engine_type
+        self.server_type = server_type
         self.to_encode_sockets: dict[str, zmq.asyncio.Socket] = (
             to_encode_sockets if to_encode_sockets is not None else {}
         )
@@ -44,6 +44,12 @@ class MetastoreClientBase(ABC):
         self.to_d_sockets: dict[str, zmq.asyncio.Socket] = (
             to_d_sockets if to_d_sockets is not None else {}
         )
+
+    def launch_proxy_task(self):
+        """
+        Launch proxy task to report node info and update socket.
+        """
+        pass
 
     def close(self):
         """
