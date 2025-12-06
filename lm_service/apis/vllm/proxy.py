@@ -144,13 +144,15 @@ class Proxy(EngineClient):
             config: MetastoreClientConfig = json_to_metastore_config(
                 metastore_client_config
             )
-            local_ip = lm_service_envs.LM_SERVICE_HOST_IP or get_ip()
-            proxy_port = (
-                int(lm_service_envs.LM_SERVICE_RPC_PORT)
-                if lm_service_envs.LM_SERVICE_RPC_PORT
-                else get_open_port()
-            )
-            proxy_addr = f"{local_ip}:{proxy_port}"
+            if proxy_addr is None:
+                local_ip = lm_service_envs.LM_SERVICE_HOST_IP or get_ip()
+                proxy_port = (
+                    int(lm_service_envs.LM_SERVICE_RPC_PORT)
+                    if lm_service_envs.LM_SERVICE_RPC_PORT
+                    else get_open_port()
+                )
+                proxy_addr = f"{local_ip}:{proxy_port}"
+
             self.proxy_addr = f"{self.transfer_protocol}://{proxy_addr}"
             if is_addr_ipv6(proxy_addr) and self.transfer_protocol == "tcp":
                 self.ctx.setsockopt(zmq.constants.IPV6, 1)
@@ -158,7 +160,7 @@ class Proxy(EngineClient):
                 MetastoreClientFactory.create_metastore_client(
                     config=config,
                     node_info=self.proxy_addr,
-                    engine_type=ServerType.PROXY.value,
+                    server_type=ServerType.PROXY.value,
                     to_encode_sockets=self.to_encode_sockets,
                     to_pd_sockets=self.to_pd_sockets,
                     to_p_sockets=self.to_p_sockets,
@@ -371,10 +373,6 @@ class Proxy(EngineClient):
                 self._run_output_handler()
             )
 
-        # lazy init all health monitors
-        for cluster in self.instance_clusters.values():
-            cluster.lazy_init_health_monitor()
-
         if not request_id:
             request_id = uuid.uuid4().hex
 
@@ -529,6 +527,12 @@ class Proxy(EngineClient):
             socket = self.ctx.socket(zmq.constants.PULL)
             socket.bind(self.proxy_addr)
             timeout = self.health_check_interval * self.health_threshold / 2
+            # lazy init all health monitors
+            for cluster in self.instance_clusters.values():
+                cluster.lazy_init_health_monitor()
+
+            if self.metastore_client is not None:
+                self.metastore_client.launch_proxy_task()
 
             while True:
                 # To kill the failed requests quickly, we check unhealthy endpoints
