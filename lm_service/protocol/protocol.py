@@ -56,6 +56,7 @@ class GenerationResponse(msgspec.Struct):
     stop_reason: Optional[str] = None
     # TODO: support full protocol.
     logprobs = None
+    kv_transfer_params: Optional[dict[str, Any]] = None
     proxy_to_worker_time_end: Optional[float] = None
 
     @classmethod
@@ -71,6 +72,7 @@ class GenerationResponse(msgspec.Struct):
             prompt_token_ids=request_output.prompt_token_ids,
             finish_reason=out.finish_reason,
             stop_reason=str(out.stop_reason),
+            kv_transfer_params=request_output.kv_transfer_params,
         )
 
 

@@ -71,6 +71,20 @@ class InstanceCluster:
 
         # encode payload
         try:
+            if self.server_type == ServerType.P_INSTANCE:
+                kv_transfer_params = {
+                    "do_remote_decode": True,
+                    "do_remote_prefill": False,
+                    "remote_engine_id": None,
+                    "remote_block_ids": None,
+                    "remote_host": None,
+                    "remote_port": None,
+                }
+                request.sampling_params.extra_args = {}
+                request.sampling_params.extra_args["kv_transfer_params"] = (
+                    kv_transfer_params
+                )
+
             payload = self.encoder.encode(request)
         except Exception as e:
             raise RuntimeError("Failed to serialize GenerationRequest") from e
@@ -138,6 +152,8 @@ class InstanceCluster:
             else:
                 # mark instance latest successful response time
                 self.service_discovery.update_latest_success(addr)
+                return response
+
         finally:
             self.stats_monitor.on_request_completed(
                 addr, request_id=request.request_id

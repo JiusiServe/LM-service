@@ -179,7 +179,9 @@ class Proxy(EngineClient):
         init_params = locals()
 
         for server_type in SERVER_PARAMS_MAP:
-            if self.is_pd_merged and server_type == ServerType.D_INSTANCE:
+            if (self.is_pd_merged and server_type == ServerType.P_INSTANCE) or (
+                not self.is_pd_merged and server_type == ServerType.PD_INSTANCE
+            ):
                 continue
             addr_param_name = str(
                 SERVER_PARAMS_MAP[server_type]["addr_list_name"]
@@ -224,7 +226,9 @@ class Proxy(EngineClient):
         self.is_pd_merged = self.metastore_client.is_pd_merged
         init_params = locals()
         for server_type in SERVER_PARAMS_MAP:
-            if self.is_pd_merged and server_type == ServerType.P_INSTANCE:
+            if (self.is_pd_merged and server_type == ServerType.P_INSTANCE) or (
+                not self.is_pd_merged and server_type == ServerType.PD_INSTANCE
+            ):
                 continue
             sockets = init_params[
                 SERVER_PARAMS_MAP[server_type]["socket_list_name"]
@@ -320,7 +324,8 @@ class Proxy(EngineClient):
         q: asyncio.Queue[Union[Exception, GenerationResponse]],
     ):
         cluster = self.instance_clusters[server_type]
-        await cluster.process_request(request, q)
+        response = await cluster.process_request(request, q)
+        return response
 
     async def _process_request_streaming_response(
         self,
@@ -424,7 +429,13 @@ class Proxy(EngineClient):
 
             # Step 2 : Maybe Prefill
             if not self.is_pd_merged:
-                await self._process_request(ServerType.P_INSTANCE, request, q)
+                response = await self._process_request(
+                    ServerType.P_INSTANCE, request, q
+                )
+                kv_transfer_params = response.kv_transfer_params
+                request.sampling_params.extra_args["kv_transfer_params"] = (
+                    kv_transfer_params
+                )
 
             # Step 3 : Decode
             decode_server_type = (
