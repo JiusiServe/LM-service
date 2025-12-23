@@ -177,12 +177,12 @@ class Proxy(EngineClient):
         if is_addr_ipv6(proxy_addr) and self.transfer_protocol == "tcp":
             self.ctx.setsockopt(zmq.constants.IPV6, 1)
         init_params = locals()
-
-        for server_type in SERVER_PARAMS_MAP:
-            if (self.is_pd_merged and server_type == ServerType.P_INSTANCE) or (
-                not self.is_pd_merged and server_type == ServerType.PD_INSTANCE
-            ):
-                continue
+        active_server_types = [ServerType.E_INSTANCE] + (
+            [ServerType.PD_INSTANCE]
+            if self.is_pd_merged
+            else [ServerType.P_INSTANCE, ServerType.D_INSTANCE]
+        )
+        for server_type in active_server_types:
             addr_param_name = str(
                 SERVER_PARAMS_MAP[server_type]["addr_list_name"]
             )
@@ -190,9 +190,8 @@ class Proxy(EngineClient):
                 f"{self.transfer_protocol}://{addr}"
                 for addr in (init_params.get(addr_param_name) or [])
             ]
-            if addr_list:
-                sockets = self.connect_to_socket(addr_list)
-                self._initialize_instance_clusters(server_type, sockets)
+            sockets = self.connect_to_socket(addr_list)
+            self._initialize_instance_clusters(server_type, sockets)
 
     def _init_cluster_with_metastore(self, metastore_client_config, proxy_addr):
         config: MetastoreClientConfig = json_to_metastore_config(
@@ -225,11 +224,12 @@ class Proxy(EngineClient):
         )
         self.is_pd_merged = self.metastore_client.is_pd_merged
         init_params = locals()
-        for server_type in SERVER_PARAMS_MAP:
-            if (self.is_pd_merged and server_type == ServerType.P_INSTANCE) or (
-                not self.is_pd_merged and server_type == ServerType.PD_INSTANCE
-            ):
-                continue
+        active_server_types = [ServerType.E_INSTANCE] + (
+            [ServerType.PD_INSTANCE]
+            if self.is_pd_merged
+            else [ServerType.P_INSTANCE, ServerType.D_INSTANCE]
+        )
+        for server_type in active_server_types:
             sockets = init_params[
                 SERVER_PARAMS_MAP[server_type]["socket_list_name"]
             ]
