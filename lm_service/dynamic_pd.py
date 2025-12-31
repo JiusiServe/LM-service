@@ -49,13 +49,13 @@ class PdEndpointInfo:
 
 @dataclass
 class SwitchAdvice:
-    switch_endpoints: List[int] = None
+    switch_endpoints: List[int]
 
 
 @dataclass
 class ElasticAdvice:
-    drop_prefills: List[int] = None
-    drop_decodes: List[int] = None
+    drop_prefills: List[int] | None = None
+    drop_decodes: List[int] | None = None
     num_add_prefills: int = 0
     num_add_decodes: int = 0
     new_total_prefills: int = -1
@@ -64,11 +64,11 @@ class ElasticAdvice:
 
 @dataclass
 class _State:
-    switchable_prefills: List[int] = None
-    switchable_decodes: List[int] = None
+    endpoints: List[PdEndpointInfo]
+    switchable_prefills: List[int]
+    switchable_decodes: List[int]
     num_prefill_only: int = -1
     num_decode_only: int = -1
-    endpoints: List[PdEndpointInfo] = None
     ttft_slot: int = -1
     tpot_slot: int = -1
 
@@ -121,21 +121,18 @@ class _SwitchAdviser:
 
     def __init__(self, slo_config: SloConfig):
         self._slo_config = slo_config
-        self._decision_matrix = \
-            [[None for _ in range(_SLO_NUM_SLOTS)] for _ in range(_SLO_NUM_SLOTS)]
-        self._decision_matrix[_SLO_EXCEL_SLOT][_SLO_EXCEL_SLOT] = self._decide_excel_or_good_slo
-        self._decision_matrix[_SLO_EXCEL_SLOT][_SLO_GOOD_SLOT] = self._decide_excel_or_good_slo
-        self._decision_matrix[_SLO_GOOD_SLOT][_SLO_EXCEL_SLOT] = self._decide_excel_or_good_slo
-        self._decision_matrix[_SLO_GOOD_SLOT][_SLO_GOOD_SLOT] = self._decide_excel_or_good_slo
-        self._decision_matrix[_SLO_GOOD_SLOT][_SLO_BAD_SLOT] = self._decide_queue_len_guided
-        self._decision_matrix[_SLO_BAD_SLOT][_SLO_GOOD_SLOT] = self._decide_queue_len_guided
-        self._decision_matrix[_SLO_BAD_SLOT][_SLO_BAD_SLOT] = self._decide_queue_len_guided
-        self._decision_matrix[_SLO_EXCEL_SLOT][_SLO_BAD_SLOT] = self._decide_excel_ttft_bad_tpot
-        self._decision_matrix[_SLO_BAD_SLOT][_SLO_EXCEL_SLOT] = self._decide_bad_ttft_excel_tpot
         self._last_action = self._Action.NO_ACTION
 
     def advise(self, state: _State) -> SwitchAdvice | None:
-        action = self._decision_matrix[state.ttft_slot][state.tpot_slot](state)
+        if state.ttft_slot <= _SLO_GOOD_SLOT and state.tpot_slot <= _SLO_GOOD_SLOT:
+            action = self._decide_excel_or_good_slo(state)
+        elif state.ttft_slot == _SLO_EXCEL_SLOT and state.tpot_slot == _SLO_BAD_SLOT:
+            action = self._decide_excel_ttft_bad_tpot(state)
+        elif state.ttft_slot == _SLO_BAD_SLOT and state.tpot_slot == _SLO_EXCEL_SLOT:
+            action = self._decide_bad_ttft_excel_tpot(state)
+        else:
+            action = self._decide_queue_len_guided(state)
+
         advice = self._get_advice(state, action)
         self._last_action = action
         return advice
@@ -358,11 +355,11 @@ class DynamicPd:
                 else:
                     num_decode_only += 1
         return _State(
+            endpoints=endpoints,
             switchable_prefills=switchable_prefills,
             switchable_decodes=switchable_decodes,
             num_prefill_only=num_prefill_only,
             num_decode_only=num_decode_only,
-            endpoints=endpoints,
             ttft_slot=ttft_slot,
             tpot_slot=tpot_slot
         )
