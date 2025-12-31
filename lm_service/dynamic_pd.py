@@ -11,16 +11,23 @@ import numpy as np
 _SLO_EXCEL_SLOT: int = 0
 _SLO_GOOD_SLOT: int = 1
 _SLO_BAD_SLOT: int = 2
-_SLO_NUM_SLOTS: int = 3
 _MAX_Q_LEN_THD_PRE_EP_REQ: int = 5
 
 
 @dataclass
 class SloConfig:
+    """
+    SLO Configurations.
+    """
+    # max. TTFT that is pass
     pass_ttft: float = 1.0
+    # max. TPOT that is pass
     pass_tpot: float = 0.25
+    # max. TTFT that is excellent, -1 means pass_ttft/2 by auto
     excel_ttft: float = -1
+    # max. TPOT that is excellent, -1 means pass_tpot/2 by auto
     excel_tpot: float = -1
+    # [0.0-1.0] cut-point for finding quantile of TTFT and TPOT
     p_quantile: float = 0.99
 
     @property
@@ -38,30 +45,55 @@ class SloConfig:
 
 @dataclass
 class StatsConfig:
+    """
+        Statistics Configurations.
+    """
+    # max. no. of TTFT/TPOT history values to be stored
     max_history: int = 1000
+    # min. no. of TTFT/TPOT history values required for generating advice
     min_history: int = 100
+    # look back window in seconds for generating advice
     time_window: float = 5 * 60
 
 
 @dataclass
 class PdEndpointInfo:
+    """
+        P/D Disaggregated Endpoint Info.
+    """
+    # is it a prefill endpoint
     is_prefill: bool
+    # is it switchable from P to D or D to P
     is_switchable: bool
+    # no. of open tasks in the endpoint's queue
     queue_length: int
 
 
 @dataclass
 class SwitchAdvice:
+    """
+        Switch Advice for fixed number of P/D endpoints.
+    """
+    # Indices of endpoints to be switched
     switch_endpoints: List[int]
 
 
 @dataclass
 class ElasticAdvice:
+    """
+        Elastic Advice for unlimited number of P/D endpoints.
+    """
+    # Indices of endpoints to be dropped (as a prefill)
     drop_prefills: List[int] | None = None
+    # Indices of endpoints to be dropped (as a decode)
     drop_decodes: List[int] | None = None
+    # no. of prefill endpoints to be added
     num_add_prefills: int = 0
+    # no. of decode endpoints to be added
     num_add_decodes: int = 0
+    # new total no. of prefill endpoints
     new_total_prefills: int = -1
+    # new total no. of decode endpoints
     new_total_decodes: int = -1
 
 
@@ -333,6 +365,9 @@ class _CircularList:
 
 
 class DynamicPd:
+    """
+        Dynamic P/D endpoints switching or elastic allocations.
+    """
     def __init__(self, slo_config: SloConfig, stats_config: StatsConfig):
         self._slo_config = slo_config
         self._stats_config = stats_config
@@ -345,6 +380,17 @@ class DynamicPd:
     def on_request_finished(
         self, ttft: float, tpot: float, finish_time: float = -1
     ):
+        """
+        Gather a request's TTFT & TPOT.
+
+        Args:
+            ttft (float): TTFT.
+            tpot (float): TPOT.
+            finish_time (float): request finish time.
+
+        Returns:
+            Switch Advice or None if there is no advice.
+        """
         if ttft > 0 and tpot > 0:
             self._ttft_hist.append(ttft)
             self._tpot_hist.append(tpot)
@@ -355,6 +401,15 @@ class DynamicPd:
     def advise_switch(
         self, endpoints: List[PdEndpointInfo]
     ) -> SwitchAdvice | None:
+        """
+        Give switch advice.
+
+        Args:
+            endpoints (list[PdEndpointInfo]): List of P/D disaggregated endpoints.
+
+        Returns:
+            Switch Advice or None if there is no advice.
+        """
         state = self._gather_state(endpoints)
         if state is None:
             return None
@@ -363,6 +418,15 @@ class DynamicPd:
     def advise_elastic(
         self, endpoints: List[PdEndpointInfo]
     ) -> ElasticAdvice | None:
+        """
+        Give elastic advice.
+
+        Args:
+            endpoints (list[PdEndpointInfo]): List of P/D disaggregated endpoints.
+
+        Returns:
+            Switch Advice or None if there is no advice.
+        """
         state = self._gather_state(endpoints)
         if state is None:
             return None
