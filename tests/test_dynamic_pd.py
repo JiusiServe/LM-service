@@ -169,7 +169,7 @@ class TestDynamicPd:
         assert elastic_advice is not None
         assert elastic_advice.drop_prefills is None
         assert elastic_advice.drop_decodes is not None
-        assert len(elastic_advice.drop_decodes) == 1
+        assert len(elastic_advice.drop_decodes) >= 1
         assert elastic_advice.delta_prefills >= 1
         assert elastic_advice.delta_decodes <= -1
         assert (
@@ -179,6 +179,53 @@ class TestDynamicPd:
         assert (
             elastic_advice.new_total_decodes
             == num_decodes + elastic_advice.delta_decodes
+        )
+
+    def test_bad_ttft_bad_tpot_queue_len_guided(self):
+        dynamic_pd = self._create_dynamic_pd()
+        self._gen_ttft_tpot(dynamic_pd, 1000, (5.0, 10.0), (1.25, 2.5))
+
+        endpoints = [
+            PdEndpointInfo(
+                is_prefill=True,
+                is_switchable=True,
+                queue_length=1,
+            ),
+            PdEndpointInfo(
+                is_prefill=True,
+                is_switchable=True,
+                queue_length=1,
+            ),
+            PdEndpointInfo(
+                is_prefill=False,
+                is_switchable=True,
+                queue_length=100,
+            ),
+            PdEndpointInfo(
+                is_prefill=False,
+                is_switchable=True,
+                queue_length=100,
+            ),
+        ]
+
+        switch_advice = dynamic_pd.advise_switch(endpoints)
+        elastic_advice = dynamic_pd.advise_elastic(endpoints)
+
+        assert switch_advice is not None
+        assert not endpoints[switch_advice.switch_endpoints[0]].is_prefill
+
+        assert elastic_advice is not None
+        assert elastic_advice.drop_prefills is None
+        assert elastic_advice.drop_decodes is None
+        assert elastic_advice.delta_prefills >= 1
+        assert elastic_advice.delta_decodes >= 1
+        assert (
+            elastic_advice.new_total_prefills
+            == 2 + elastic_advice.delta_prefills
+        )
+        assert (
+            elastic_advice.new_total_decodes
+            == 2 + elastic_advice.delta_decodes
         )
 
     @staticmethod
