@@ -51,8 +51,8 @@ class TestDynamicPd:
         assert elastic_advice is not None
         assert elastic_advice.drop_prefills is not None
         assert len(elastic_advice.drop_prefills) >= 1
-        assert elastic_advice.drop_decode is not None
-        assert len(elastic_advice.drop_decode) >= 1
+        assert elastic_advice.drop_decodes is not None
+        assert len(elastic_advice.drop_decodes) >= 1
         assert elastic_advice.delta_prefills <= -1
         assert elastic_advice.delta_decodes <= -1
         assert elastic_advice.new_total_prefills == num_prefills + elastic_advice.delta_prefills
@@ -74,7 +74,7 @@ class TestDynamicPd:
 
         assert elastic_advice is not None
         assert elastic_advice.drop_prefills is None
-        assert elastic_advice.drop_decode is None
+        assert elastic_advice.drop_decodes is None
         assert elastic_advice.delta_prefills >= 1
         assert elastic_advice.delta_decodes == 0
         assert elastic_advice.new_total_prefills == num_prefills + elastic_advice.delta_prefills
@@ -96,7 +96,7 @@ class TestDynamicPd:
 
         assert elastic_advice is not None
         assert elastic_advice.drop_prefills is None
-        assert elastic_advice.drop_decode is None
+        assert elastic_advice.drop_decodes is None
         assert elastic_advice.delta_prefills == 0
         assert elastic_advice.delta_decodes >= 1
         assert elastic_advice.new_total_prefills == num_prefills + elastic_advice.delta_prefills
@@ -119,7 +119,7 @@ class TestDynamicPd:
         assert elastic_advice is not None
         assert elastic_advice.drop_prefills is not None
         assert len(elastic_advice.drop_prefills) >= 1
-        assert elastic_advice.drop_decode is None
+        assert elastic_advice.drop_decodes is None
         assert elastic_advice.delta_prefills <= -1
         assert elastic_advice.delta_decodes >= 1
         assert elastic_advice.new_total_prefills == num_prefills + elastic_advice.delta_prefills
