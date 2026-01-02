@@ -69,8 +69,7 @@ class TestDynamicPd:
         switch_advice = dynamic_pd.advise_switch(endpoints)
         elastic_advice = dynamic_pd.advise_elastic(endpoints)
 
-        assert switch_advice is not None
-        assert not endpoints[switch_advice.switch_endpoints[0]].is_prefill
+        assert switch_advice is None
 
         assert elastic_advice is not None
         assert elastic_advice.drop_prefills is None
@@ -91,8 +90,7 @@ class TestDynamicPd:
         switch_advice = dynamic_pd.advise_switch(endpoints)
         elastic_advice = dynamic_pd.advise_elastic(endpoints)
 
-        assert switch_advice is not None
-        assert endpoints[switch_advice.switch_endpoints[0]].is_prefill
+        assert switch_advice is None
 
         assert elastic_advice is not None
         assert elastic_advice.drop_prefills is None

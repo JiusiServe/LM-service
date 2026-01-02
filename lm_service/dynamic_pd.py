@@ -181,12 +181,7 @@ class _SwitchAdviser:
         else:
             action = self._decide_queue_len_guided(state)
 
-        print(f"=============== _SwitchAdviser.advise action:{action}")
-
         advice = self._get_advice(state, action)
-
-        print(f"=============== _SwitchAdviser.advise advice:{advice}")
-
         self._last_action = action
         return advice
 
@@ -420,12 +415,9 @@ class DynamicPd:
         Returns:
             Switch Advice or None if there is no advice.
         """
-        print(f"=============== advise_switch 1")
         state = self._gather_state(endpoints)
         if state is None:
-            print(f"=============== advise_switch 2")
             return None
-        print(f"=============== advise_switch 3")
         return self._switch_adviser.advise(state)
 
     def advise_elastic(
