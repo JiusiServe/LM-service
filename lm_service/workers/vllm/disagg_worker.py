@@ -131,7 +131,9 @@ class DisaggWorker:
             self.hb_socket.bind(self.hb_addr)
             logger.info(f"Worker heartbeat socket bound to {self.hb_addr}")
         except zmq.ZMQError as e:
-            logger.error(f"Failed to bind heartbeat socket to {self.hb_addr}: {e}")
+            logger.error(
+                f"Failed to bind heartbeat socket to {self.hb_addr}: {e}"
+            )
             raise
 
         self.decoder_generate = msgspec.msgpack.Decoder(GenerationRequest)
@@ -147,9 +149,7 @@ class DisaggWorker:
         self._exit_started = False
 
         self.hb_thread = threading.Thread(
-            target=self._run_heartbeat_loop,
-            name="HeartbeatLoop",
-            daemon=True
+            target=self._run_heartbeat_loop, name="HeartbeatLoop", daemon=True
         )
         self.hb_thread.start()
 
@@ -338,11 +338,13 @@ class DisaggWorker:
                                 hb_req = self.decoder_heartbeat.decode(req_data)
                                 # Send response immediately
                                 resp = HeartbeatResponse(
-                                    request_id=hb_req.request_id,
-                                    status="OK"
+                                    request_id=hb_req.request_id, status="OK"
                                 )
                                 self.hb_socket.send_multipart(
-                                    [ResponseType.HEARTBEAT, self.encoder.encode(resp)]
+                                    [
+                                        ResponseType.HEARTBEAT,
+                                        self.encoder.encode(resp),
+                                    ]
                                 )
                             except Exception as e:
                                 logger.error(f"Error processing heartbeat: {e}")

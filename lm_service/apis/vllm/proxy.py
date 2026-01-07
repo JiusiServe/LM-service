@@ -701,8 +701,7 @@ class Proxy(EngineClient):
         request_id = str(uuid.uuid4())
 
         request = HeartbeatRequest(
-            request_id=request_id,
-            proxy_addr=self.proxy_addr
+            request_id=request_id, proxy_addr=self.proxy_addr
         )
 
         socket = None
@@ -710,8 +709,12 @@ class Proxy(EngineClient):
             # TODO: Create a temporary REQ socket for this check
             socket = self.ctx.socket(zmq.REQ)
             # Set timeout to avoid hanging indefinitely if worker is down
-            socket.setsockopt(zmq.RCVTIMEO, int(self.health_check_interval * 1000))
-            socket.setsockopt(zmq.SNDTIMEO, int(self.health_check_interval * 1000))
+            socket.setsockopt(
+                zmq.RCVTIMEO, int(self.health_check_interval * 1000)
+            )
+            socket.setsockopt(
+                zmq.SNDTIMEO, int(self.health_check_interval * 1000)
+            )
             socket.connect(hb_addr)
 
             payload = self.encoder.encode(request)
@@ -733,7 +736,9 @@ class Proxy(EngineClient):
 
         except zmq.Again:
             # TimeoutOperation
-            logger.warning(f"Health check timeout for {server_type} {addr} (HB port {hb_addr})")
+            logger.warning(
+                f"Health check timeout for {server_type} {addr} (HB port {hb_addr})"
+            )
             return False
         except Exception as e:
             logger.warning(
