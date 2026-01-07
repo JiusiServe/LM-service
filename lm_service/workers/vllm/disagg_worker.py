@@ -4,6 +4,7 @@
 import asyncio
 import os
 import time
+import threading
 from PIL import Image
 import uuid
 from typing import Any, Optional, Union
@@ -44,7 +45,7 @@ from lm_service.metastore_client.metastore_client_config import (
 from lm_service.metastore_client.metastore_client import (
     MetastoreClientBase,
 )
-from lm_service.utils import is_addr_ipv6
+from lm_service.utils import is_addr_ipv6, get_heartbeat_addr
 
 from lm_service.logger_utils import init_logger
 
@@ -121,6 +122,20 @@ class DisaggWorker:
             logger.info(
                 f"Worker address: {self.worker_addr}, proxy_addr: {self.proxy_addr_list}"
             )
+
+        # Heartbeat sidecar setup
+        self.hb_addr = get_heartbeat_addr(self.worker_addr)
+        self.hb_ctx = zmq.Context()
+        self.hb_socket = self.hb_ctx.socket(zmq.REP)
+        try:
+            self.hb_socket.bind(self.hb_addr)
+            logger.info(f"Worker heartbeat socket bound to {self.hb_addr}")
+        except zmq.ZMQError as e:
+            logger.error(
+                f"Failed to bind heartbeat socket to {self.hb_addr}: {e}"
+            )
+            raise
+
         self.decoder_generate = msgspec.msgpack.Decoder(GenerationRequest)
         self.decoder_heartbeat = msgspec.msgpack.Decoder(HeartbeatRequest)
         self.decoder_abort = msgspec.msgpack.Decoder(GenerationRequest)
@@ -133,7 +148,18 @@ class DisaggWorker:
         self._exit_done_event = asyncio.Event()
         self._exit_started = False
 
+        self.hb_thread = threading.Thread(
+            target=self._run_heartbeat_loop, name="HeartbeatLoop", daemon=True
+        )
+        self.hb_thread.start()
+
     def shutdown(self):
+        self.stopping = True
+
+        # Cleanup heartbeat resources
+        if hasattr(self, "hb_ctx"):
+            self.hb_ctx.destroy()
+
         for socket in self.to_proxy.values():
             socket.close(
                 linger=lm_service_envs.LM_SERVICE_WORKER_GRACEFUL_EXIT_TIMEOUT_SEC
@@ -287,6 +313,53 @@ class DisaggWorker:
             self.to_proxy[req.proxy_addr] = socket
 
         await self.to_proxy[req.proxy_addr].send_multipart(msg, copy=False)
+
+    def _run_heartbeat_loop(self):
+        """
+        Runs in a separate thread to handle heartbeat requests independently
+        of the main event loop. Uses synchronous ZMQ REP socket.
+        """
+        logger.info(f"Heartbeat loop started on {self.hb_addr}")
+        poller = zmq.Poller()
+        poller.register(self.hb_socket, zmq.POLLIN)
+
+        while not self.stopping:
+            try:
+                # Poll with timeout to allow checking self.stopping
+                socks = dict(poller.poll(1000))
+                if self.hb_socket in socks:
+                    # Receive request
+                    frames = self.hb_socket.recv_multipart()
+                    if len(frames) >= 2:
+                        req_type, req_data = frames[0], frames[1]
+
+                        if req_type == RequestType.HEARTBEAT:
+                            try:
+                                hb_req = self.decoder_heartbeat.decode(req_data)
+                                # Send response immediately
+                                resp = HeartbeatResponse(
+                                    request_id=hb_req.request_id, status="OK"
+                                )
+                                self.hb_socket.send_multipart(
+                                    [
+                                        ResponseType.HEARTBEAT,
+                                        self.encoder.encode(resp),
+                                    ]
+                                )
+                            except Exception as e:
+                                logger.error(f"Error processing heartbeat: {e}")
+                                # Send empty frame to satisfy REP socket if decoding fails
+                                self.hb_socket.send(b"")
+                        else:
+                            # Unknown request type on HB socket
+                            self.hb_socket.send(b"")
+                    else:
+                        self.hb_socket.send(b"")
+            except zmq.ContextTerminated:
+                break
+            except Exception as e:
+                if not self.stopping:
+                    logger.error(f"Error in heartbeat loop: {e}")
 
     async def _encode_handler(self, req: GenerationRequest):
         task = asyncio.create_task(
