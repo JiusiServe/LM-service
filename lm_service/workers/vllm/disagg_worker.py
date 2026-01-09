@@ -126,6 +126,8 @@ class DisaggWorker:
         # Heartbeat sidecar setup
         self.hb_addr = get_heartbeat_addr(self.worker_addr)
         self.hb_ctx = zmq.Context()
+        if is_addr_ipv6(address) and self.transfer_protocol == "tcp":
+            self.ctx.setsockopt(zmq.constants.IPV6, 1)
         self.hb_socket = self.hb_ctx.socket(zmq.REP)
         try:
             self.hb_socket.bind(self.hb_addr)
