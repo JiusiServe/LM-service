@@ -1,0 +1,5 @@
+model_path: "/data/models/"
+image_path: "/workspace/vllm-datasets/textvqa_subset/train_images/"
+dataset_path: "/workspace/vllm-datasets/"
+mooncake_config_path: "/workspace/mooncake-config/"
+container_name: "epd_vllm_ascend_ipv6"
