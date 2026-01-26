@@ -30,18 +30,12 @@ from transformers import (
     BatchFeature,
 )
 
-from tests.e2e.nightly.multi_node.config.multi_node_epd_config import EnvManager
-
 
 # TODO: remove this part after the patch merged into vllm, if
 # we not explicitly patch here, some of them might be effectiveless
 # in pytest scenario
-from vllm_ascend.utils import vllm_version_is
 
-if vllm_version_is("0.9.1"):
-    from vllm.utils.network_utils import get_open_port
-else:
-    from vllm.utils import get_open_port
+from vllm.utils import get_open_port
 
 from vllm.distributed.parallel_state import (  # noqa E402
     destroy_distributed_environment,
@@ -1182,7 +1176,7 @@ class RemoteEPDServer:
         mooncake_args=None,
         proxy_args: Union[list[str], str] = None,
         api_server_port: Optional[int] = 10001,
-        env_dict: EnvManager = None,
+        env_dict=None,
     ) -> None:
         self._share_info = SharedInfoManager()
         self._output = OutputManager(self._share_info)
@@ -1363,7 +1357,7 @@ class DisaggEpdProxy:
         self,
         port,
         proxy_args: Union[list[str], str] = None,
-        env_dict: EnvManager = None,
+        env_dict=None,
         server: RemoteEPDServer = None,
     ) -> None:
         self.port = port
