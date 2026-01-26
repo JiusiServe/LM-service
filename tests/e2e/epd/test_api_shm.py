@@ -143,7 +143,7 @@ async def test_1e1pd_shm_tcp_001(
         env_dict=env_dict,
         e_serve_args=e_server_args,
         pd_serve_args=pd_server_args,
-    ) as server:
+    ) as _:
         # warm up
         run_aisbench_cases(
             model=model,
@@ -273,7 +273,7 @@ async def test_1e1pd_sc_shm_tcp_001(
         env_dict=env_dict,
         e_serve_args=e_server_args,
         pd_serve_args=pd_server_args,
-    ) as server:
+    ) as _:
         # warm up
         run_aisbench_cases(
             model=model,
