@@ -29,6 +29,7 @@ develop = [
     "pytest-cov>=4.0",
     "httpx",
     "pandas",
+    "openai",
     "coverage[toml]>=7.0",
 ]
 
