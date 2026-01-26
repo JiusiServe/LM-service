@@ -1330,10 +1330,10 @@ class RemoteEPDServer:
         for proc in self._proc_list:
             kill_process_tree(proc.pid)
         self._container.kill_container_process_only()
-        print("vllm instance and api server is stoping")
+        print("vllm instance and api server is stopping")
         if self.p is not None:
             self.p.shutdown()
-        print("proxy is stoping")
+        print("proxy is stopping")
 
 
 class DisaggEpdProxy:
@@ -1423,7 +1423,7 @@ class DisaggEpdProxy:
         # exit with
         for proc in self._proc_list:
             kill_process_tree(proc.pid)
-        print("proxy is stoping")
+        print("proxy is stopping")
 
 
 class RemoteOpenAIServer:
