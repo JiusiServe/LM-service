@@ -32,10 +32,8 @@ try:
     import matplotlib.ticker as ticker
     import pandas as pd
     from matplotlib.patches import Patch
-except (ImportError, ModuleNotFoundError) as e:
-    raise ImportError(
-        "Failed to import required dependencies (matplotlib, pandas)"
-    ) from e
+except (ImportError, ModuleNotFoundError):
+    pass
 
 
 def get_package_location(package_name):

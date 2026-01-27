@@ -30,10 +30,8 @@ try:
         BatchEncoding,
         BatchFeature,
     )
-except (ImportError, ModuleNotFoundError) as e:
-    raise ImportError(
-        "Failed to import required dependencies (pandas, psutil, pytest, requests, torch, PIL, modelscope, transformers)"
-    ) from e
+except (ImportError, ModuleNotFoundError):
+    pass
 
 
 # TODO: remove this part after the patch merged into vllm, if
