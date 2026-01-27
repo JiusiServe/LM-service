@@ -12,9 +12,8 @@ import threading
 import traceback
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple, TypeVar, Union, Literal
+from typing import List, Optional, TypeVar, Union, Literal
 
-import numpy as np
 import importlib
 
 try:
@@ -23,7 +22,6 @@ try:
     import pytest
     import requests
     import torch
-    from PIL import Image
     from modelscope import snapshot_download  # type: ignore[import-untyped]
 except (ImportError, ModuleNotFoundError):
     pass
@@ -45,9 +43,6 @@ _M = TypeVar("_M")
 
 _PromptMultiModalInput = Union[List[_M], List[List[_M]]]
 
-PromptImageInput = _PromptMultiModalInput[Image.Image]
-PromptAudioInput = _PromptMultiModalInput[Tuple[np.ndarray, int]]
-PromptVideoInput = _PromptMultiModalInput[np.ndarray]
 
 _TEST_DIR = os.path.dirname(__file__)
 DISAGG_EPD_PROXY_SCRIPT = "../../../examples/epd/disagg_epd_proxy.py"
