@@ -6,6 +6,7 @@ import pytest
 
 from ..conftest import RemoteEPDServer
 from .conftest import load_config
+
 try:
     from tools.aisbench import run_aisbench_cases
 except (ImportError, ModuleNotFoundError):
