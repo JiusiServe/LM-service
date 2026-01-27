@@ -15,20 +15,25 @@ from pathlib import Path
 from typing import List, Optional, Tuple, TypeVar, Union, Literal
 
 import numpy as np
-import pandas as pd
-import psutil
-import pytest
-import requests
-import torch
 import importlib
-from PIL import Image
 
-from modelscope import snapshot_download  # type: ignore[import-untyped]
-from torch import nn
-from transformers import (
-    BatchEncoding,
-    BatchFeature,
-)
+try:
+    import pandas as pd
+    import psutil
+    import pytest
+    import requests
+    import torch
+    from PIL import Image
+    from modelscope import snapshot_download  # type: ignore[import-untyped]
+    from torch import nn
+    from transformers import (
+        BatchEncoding,
+        BatchFeature,
+    )
+except (ImportError, ModuleNotFoundError) as e:
+    raise ImportError(
+        "Failed to import required dependencies (pandas, psutil, pytest, requests, torch, PIL, modelscope, transformers)"
+    ) from e
 
 
 # TODO: remove this part after the patch merged into vllm, if
