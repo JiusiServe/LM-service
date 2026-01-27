@@ -6,7 +6,10 @@ import pytest
 
 from ..conftest import RemoteEPDServer
 from .conftest import load_config
-from tools.aisbench import run_aisbench_cases
+try:
+    from tools.aisbench import run_aisbench_cases
+except (ImportError, ModuleNotFoundError):
+    run_aisbench_cases = None
 from ..nightly.multi_node.config.multi_node_epd_config import EnvManager
 from vllm.utils import get_open_port
 
