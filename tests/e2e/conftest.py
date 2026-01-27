@@ -25,11 +25,6 @@ try:
     import torch
     from PIL import Image
     from modelscope import snapshot_download  # type: ignore[import-untyped]
-    from torch import nn
-    from transformers import (
-        BatchEncoding,
-        BatchFeature,
-    )
 except (ImportError, ModuleNotFoundError):
     pass
 
@@ -46,7 +41,6 @@ try:
 except (ImportError, ModuleNotFoundError):
     pass
 
-_T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature, dict)
 _M = TypeVar("_M")
 
 _PromptMultiModalInput = Union[List[_M], List[List[_M]]]
