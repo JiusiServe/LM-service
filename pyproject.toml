@@ -41,6 +41,7 @@ develop = [
     "vllm>=0.11.0",
     "matplotlib>=3.10.7",
     "fastapi>=0.121.1",
+    "ais_bench_benchmark>=3.0.0",
     "coverage[toml]>=7.0",
 ]
 
