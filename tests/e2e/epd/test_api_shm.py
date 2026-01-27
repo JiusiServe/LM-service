@@ -4,10 +4,10 @@ import os
 
 import pytest
 
-from tests.e2e.conftest import RemoteEPDServer
-from tests.e2e.epd.conftest import load_config
-from tools.aisbench import run_aisbench_cases
-from tests.e2e.nightly.multi_node.config.multi_node_epd_config import EnvManager
+from ..conftest import RemoteEPDServer
+from .conftest import load_config
+from ....tools.aisbench import run_aisbench_cases
+from ..nightly.multi_node.config.multi_node_epd_config import EnvManager
 from vllm.utils import get_open_port
 
 model_path = load_config().get("model_path")
