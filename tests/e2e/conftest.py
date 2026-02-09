@@ -22,6 +22,9 @@ import pandas as pd
 import psutil
 
 from ..e2e.nightly.multi_node.config.multi_node_config import NodeInfo
+from ..e2e.nightly.multi_node.config.multi_node_epd_config import ClusterManager
+from ..e2e.nightly.multi_node.config.multi_node_epd_config import EnvManager
+from ..e2e.nightly.multi_node.config.utils import get_cluster_ips
 
 try:
     from modelscope import snapshot_download  # type: ignore[import-untyped]
@@ -30,6 +33,7 @@ try:
     from vllm.utils import get_open_port
     import httpx
     import openai
+    import socket
 except (ImportError, ModuleNotFoundError):
     pass
 
@@ -1183,8 +1187,9 @@ class RemoteEPDServer:
         kv_store_type: Literal["mooncake", "datasystem"] = "",
         mooncake_args=None,
         proxy_args: Union[list[str], str] = None,
+        node_info: ClusterManager = None,
         api_server_port: Optional[int] = 10001,
-        env_dict=None,
+        env_dict: EnvManager = None,
     ) -> None:
         self._share_info = SharedInfoManager()
         self._output = OutputManager(self._share_info)
@@ -1211,6 +1216,7 @@ class RemoteEPDServer:
         self.api_server_port = api_server_port
         self.e_serve_args_list = list()
         self.pd_serve_args_list = list()
+        self.node_info = node_info
         self.proxy_port = get_open_port()
         self.model = None
         self.datasystem_port = None
@@ -1247,6 +1253,18 @@ class RemoteEPDServer:
             self.enable_ipv6 = True
         else:
             self.enable_ipv6 = False
+        if node_info is not None and self.enable_ipv6:
+            self.cluster_ips = get_cluster_ips(family=socket.AF_INET6)
+            for i in range(len(self.cluster_ips)):
+                self.cluster_ips[i] = f"[{self.cluster_ips[i]}]"
+        elif self.enable_ipv6:
+            self.cluster_ips = get_cluster_ips(family=socket.AF_INET6) or [
+                "::1"
+            ]
+            for i in range(len(self.cluster_ips)):
+                self.cluster_ips[i] = f"[{self.cluster_ips[i]}]"
+        else:
+            self.cluster_ips = get_cluster_ips() or ["127.0.0.1"]
 
     async def __aenter__(self):
         # start with
