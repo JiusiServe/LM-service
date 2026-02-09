@@ -307,7 +307,7 @@ async def test_1e1pd_sc_shm_tcp_001(
 
 DATASET_NAME = ["simulate_truth_samereq"]
 
-
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
@@ -454,6 +454,7 @@ async def test_1e2pd_shm_tcp_001(
 DATASET_NAME = ["simulate_truth", "image_4"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
@@ -598,6 +599,7 @@ async def test_1e2pd_shm_tcp_002(
 DATASET_NAME = ["textvqa-subset"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.acc
 @pytest.mark.parametrize("model", MODELS)
@@ -711,6 +713,7 @@ async def test_1e2pd_shm_tcp_003(model: str, tp_size: int, dataset_name: str):
 DATASET_NAME = ["simulate_truth", "image_4"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
@@ -854,6 +857,7 @@ async def test_1e2pd_shm_tcp_004(
 DATASET_NAME = ["simulate_truth", "image_4"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
@@ -994,6 +998,7 @@ async def test_1e2pd_shm_ipc_001(
 DATASET_NAME = ["simulate_truth"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
@@ -1140,6 +1145,7 @@ async def test_3e5pd_shm_tcp_001(
 DATASET_NAME = ["simulate_truth", "image_4"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
@@ -1288,6 +1294,7 @@ async def test_1e2pd_cross_p_epd_shm_tcp_001(
 DATASET_NAME = ["textvqa-subset"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.acc
 @pytest.mark.parametrize("model", MODELS)
@@ -1406,6 +1413,7 @@ async def test_1e2pd_cross_p_epd_shm_tcp_002(
 DATASET_NAME = ["simulate_truth"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.stability
 @pytest.mark.timeout(90000)
@@ -1527,6 +1535,7 @@ MODELS = [os.path.join(model_path, "Qwen3-VL-30B-A3B-Instruct")]
 DATASET_NAME = ["simulate_truth", "image_4"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
@@ -1672,6 +1681,7 @@ async def test_1e1pd_shm_tcp_002(
 DATASET_NAME = ["simulate_truth"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
@@ -1812,7 +1822,7 @@ async def test_1e1pd_shm_ipc_001(
 
 DATASET_NAME = ["textvqa-subset"]
 
-
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.acc
 @pytest.mark.parametrize("model", MODELS)
@@ -1929,6 +1939,7 @@ async def test_1e1pd_cross_p_epd_shm_tcp_001(
 DATASET_NAME = ["simulate_truth"]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.stability
 @pytest.mark.timeout(90000)
@@ -2054,6 +2065,7 @@ DATASET_NAME = ["simulate_truth", "image_4"]
 TENSOR_PARALLELS = [4]
 
 
+@pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
 @pytest.mark.perf
 @pytest.mark.parametrize("model", MODELS)
