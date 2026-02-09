@@ -15,8 +15,7 @@ try:
     from tools.aisbench import run_aisbench_cases
     from vllm.utils import get_open_port
 except (ImportError, ModuleNotFoundError):
-    run_aisbench_cases = None
-    get_open_port = None
+    pass
 from ..nightly.multi_node.config.multi_node_epd_config import (
     ClusterManager,
     EnvManager,
@@ -306,6 +305,7 @@ async def test_1e1pd_sc_shm_tcp_001(
 
 
 DATASET_NAME = ["simulate_truth_samereq"]
+
 
 @pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
@@ -1821,6 +1821,7 @@ async def test_1e1pd_shm_ipc_001(
 
 
 DATASET_NAME = ["textvqa-subset"]
+
 
 @pytest.mark.skip(reason="skip for now")
 @pytest.mark.asyncio
