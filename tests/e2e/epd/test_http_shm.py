@@ -61,7 +61,6 @@ async def test_1e1pd_shm_http_001(
         )
 
     e_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.01",
@@ -81,7 +80,6 @@ async def test_1e1pd_shm_http_001(
         + '"},"ec_connector":"ECSharedStorageConnector","ec_role": "ec_producer"}',
     ]
     pd_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.95",
@@ -198,7 +196,6 @@ async def test_1e2pd_shm_http_001(
         )
 
     e_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.01",
@@ -218,7 +215,6 @@ async def test_1e2pd_shm_http_001(
         + '"},"ec_connector":"ECSharedStorageConnector","ec_role": "ec_producer"}',
     ]
     pd_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.95",
@@ -337,7 +333,6 @@ async def test_3e5pd_shm_http_001(
         )
 
     e_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.01",
@@ -357,7 +352,6 @@ async def test_3e5pd_shm_http_001(
         + '"},"ec_connector":"ECSharedStorageConnector","ec_role": "ec_producer"}',
     ]
     pd_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.95",
@@ -479,7 +473,6 @@ async def test_1e2pd_shm_http_002(
         )
 
     e_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.01",
@@ -499,7 +492,6 @@ async def test_1e2pd_shm_http_002(
         + '"},"ec_connector":"ECSharedStorageConnector","ec_role": "ec_producer"}',
     ]
     pd_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.95",
@@ -617,7 +609,6 @@ async def test_1e2pd_shm_http_003(model: str, tp_size: int, dataset_name: str):
         )
 
     e_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.01",
@@ -637,7 +628,6 @@ async def test_1e2pd_shm_http_003(model: str, tp_size: int, dataset_name: str):
         + '"},"ec_connector":"ECSharedStorageConnector","ec_role": "ec_producer"}',
     ]
     pd_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.95",
@@ -727,7 +717,6 @@ async def test_1e1p1d_shm_http_001(
     env_dict.add_env("d", "ASCEND_RT_VISIBLE_DEVICES", "2")
 
     e_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.01",
@@ -748,7 +737,6 @@ async def test_1e1p1d_shm_http_001(
     ]
     pd_server_args = [
         [
-            "--model",
             model,
             "--gpu-memory-utilization",
             "0.95",
@@ -771,7 +759,6 @@ async def test_1e1p1d_shm_http_001(
             '"engine_id":"0", "kv_rank": 0, "kv_connector_module_paht": "vllm_ascend.distriuted.mooncake_connector"}',
         ],
         [
-            "--model",
             model,
             "--gpu-memory-utilization",
             "0.95",
@@ -886,7 +873,6 @@ async def test_1e1p1d_shm_http_002(model: str, tp_size: int, dataset_name: str):
     env_dict.add_env("d", "ASCEND_RT_VISIBLE_DEVICES", "2")
 
     e_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.01",
@@ -907,7 +893,6 @@ async def test_1e1p1d_shm_http_002(model: str, tp_size: int, dataset_name: str):
     ]
     pd_server_args = [
         [
-            "--model",
             model,
             "--gpu-memory-utilization",
             "0.95",
@@ -930,7 +915,6 @@ async def test_1e1p1d_shm_http_002(model: str, tp_size: int, dataset_name: str):
             '"engine_id":"0", "kv_rank": 0, "kv_connector_module_paht": "vllm_ascend.distriuted.mooncake_connector"}',
         ],
         [
-            "--model",
             model,
             "--gpu-memory-utilization",
             "0.95",
@@ -1031,7 +1015,6 @@ async def test_2e3p3d_shm_http_001(
         )
 
     e_server_args = [
-        "--model",
         model,
         "--gpu-memory-utilization",
         "0.01",
@@ -1055,7 +1038,6 @@ async def test_2e3p3d_shm_http_001(
     for i in range(p_num):
         pd_server_args.append(
             [
-                "--model",
                 model,
                 "--gpu-memory-utilization",
                 "0.95",
@@ -1082,7 +1064,6 @@ async def test_2e3p3d_shm_http_001(
     for i in range(d_num):
         pd_server_args.append(
             [
-                "--model",
                 model,
                 "--gpu-memory-utilization",
                 "0.95",
