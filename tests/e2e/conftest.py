@@ -21,8 +21,19 @@ import torch
 import pandas as pd
 import psutil
 
+from ..e2e.nightly.multi_node.config.multi_node_config import NodeInfo
+from ..e2e.nightly.multi_node.config.multi_node_epd_config import ClusterManager
+from ..e2e.nightly.multi_node.config.multi_node_epd_config import EnvManager
+from ..e2e.nightly.multi_node.config.utils import get_cluster_ips
+
 try:
     from modelscope import snapshot_download  # type: ignore[import-untyped]
+    from typing import Any
+    import shlex
+    from vllm.utils import get_open_port
+    import httpx
+    import openai
+    import socket
 except (ImportError, ModuleNotFoundError):
     pass
 
@@ -1176,8 +1187,9 @@ class RemoteEPDServer:
         kv_store_type: Literal["mooncake", "datasystem"] = "",
         mooncake_args=None,
         proxy_args: Union[list[str], str] = None,
+        node_info: ClusterManager = None,
         api_server_port: Optional[int] = 10001,
-        env_dict=None,
+        env_dict: EnvManager = None,
     ) -> None:
         self._share_info = SharedInfoManager()
         self._output = OutputManager(self._share_info)
@@ -1204,6 +1216,7 @@ class RemoteEPDServer:
         self.api_server_port = api_server_port
         self.e_serve_args_list = list()
         self.pd_serve_args_list = list()
+        self.node_info = node_info
         self.proxy_port = get_open_port()
         self.model = None
         self.datasystem_port = None
@@ -1240,6 +1253,18 @@ class RemoteEPDServer:
             self.enable_ipv6 = True
         else:
             self.enable_ipv6 = False
+        if node_info is not None and self.enable_ipv6:
+            self.cluster_ips = get_cluster_ips(family=socket.AF_INET6)
+            for i in range(len(self.cluster_ips)):
+                self.cluster_ips[i] = f"[{self.cluster_ips[i]}]"
+        elif self.enable_ipv6:
+            self.cluster_ips = get_cluster_ips(family=socket.AF_INET6) or [
+                "::1"
+            ]
+            for i in range(len(self.cluster_ips)):
+                self.cluster_ips[i] = f"[{self.cluster_ips[i]}]"
+        else:
+            self.cluster_ips = get_cluster_ips() or ["127.0.0.1"]
 
     async def __aenter__(self):
         # start with
@@ -1379,6 +1404,228 @@ class DisaggEpdProxy:
         for proc in self._proc_list:
             kill_process_tree(proc.pid)
         print("proxy is stopping")
+
+
+class RemoteOpenAIServer:
+    DUMMY_API_KEY = "token-abc123"  # vLLM's OpenAI server does not need API key
+
+    def _start_server(
+        self,
+        model: str,
+        server_cmd: list[str],
+        env_dict: Optional[dict[str, str]],
+    ) -> None:
+        """Subclasses override this method to customize server process launch"""
+        env = os.environ.copy()
+        # the current process might initialize npu,
+        # to be safe, we should use spawn method
+        env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+        env["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
+        env["VLLM_USE_V1"] = "1"
+        env["PYTORCH_NPU_ALLOC_CONF"] = "expandable_segments:True"
+        if env_dict is not None:
+            env.update(env_dict)
+        self.proc: subprocess.Popen = subprocess.Popen(
+            server_cmd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            bufsize=1,
+        )
+        stdout_thread = threading.Thread(
+            target=self._output.read_output,
+            args=(self.proc.stdout, ""),
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(
+            target=self._output.read_output,
+            args=(self.proc.stderr, ""),
+            daemon=True,
+        )
+
+        stdout_thread.start()
+        stderr_thread.start()
+
+    def __init__(
+        self,
+        model: str,
+        vllm_serve_args: Union[list[str], str],
+        *,
+        server_host: str = "0.0.0.0",
+        server_port: int = 8080,
+        env_dict: Optional[dict[str, str]] = None,
+        seed: Optional[int] = None,
+        auto_port: bool = True,
+        nodes_info: Optional[list[NodeInfo]] = None,
+        disaggregated_prefill: Optional[dict] = None,
+        proxy_port: Optional[int] = None,
+        max_wait_seconds: Optional[float] = None,
+        override_hf_configs: Optional[dict[str, Any]] = None,
+    ) -> None:
+        if isinstance(vllm_serve_args, str):
+            vllm_serve_args = shlex.split(vllm_serve_args)
+        else:
+            vllm_serve_args = [
+                "taskset",
+                "-c",
+                "0-96",
+                "vllm",
+                "serve",
+                model,
+                *vllm_serve_args,
+            ]
+        if auto_port:
+            if "-p" in vllm_serve_args or "--port" in vllm_serve_args:
+                raise ValueError(
+                    "You have manually specified the port "
+                    "when `auto_port=True`."
+                )
+
+            # No need for a port if using unix sockets
+            if "--uds" not in vllm_serve_args:
+                # Don't mutate the input args
+                vllm_serve_args = vllm_serve_args + [
+                    "--port",
+                    str(get_open_port()),
+                ]
+        if seed is not None:
+            if "--seed" in vllm_serve_args:
+                raise ValueError(
+                    f"You have manually specified the seed when `seed={seed}`."
+                )
+
+            vllm_serve_args = vllm_serve_args + ["--seed", str(seed)]
+
+        if override_hf_configs is not None:
+            vllm_serve_args = vllm_serve_args + [
+                "--hf-overrides",
+                json.dumps(override_hf_configs),
+            ]
+
+        self.host = str(server_host)
+        self.port = int(server_port)
+        # for multi-nodes test
+        self.nodes_info = nodes_info
+        self.disaggregated_prefill = disaggregated_prefill
+        self.cur_index = os.getenv("LWS_WORKER_INDEX", 0)
+        self.proxy_port = proxy_port
+        self._share_info = SharedInfoManager()
+        self._output = OutputManager(self._share_info)
+
+        self._start_server(model, vllm_serve_args, env_dict)
+        max_wait_seconds = max_wait_seconds or 1800
+        if self.disaggregated_prefill:
+            assert proxy_port is not None, (
+                "for disaggregated_prefill, proxy port must be provided"
+            )
+            self._wait_for_server_pd(
+                proxy_port=proxy_port, timeout=max_wait_seconds
+            )
+        else:
+            self._wait_for_server(
+                url=self.url_for("health"), timeout=max_wait_seconds
+            )
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.proc.terminate()
+        try:
+            self.proc.wait(8)
+        except subprocess.TimeoutExpired:
+            # force kill if needed
+            self.proc.kill()
+
+    def _poll(self) -> Optional[int]:
+        """Subclasses override this method to customize process polling"""
+        return self.proc.poll()
+
+    def hang_until_terminated(self, url) -> None:
+        """
+        Wait until the server process terminates.
+        This is for headless mode, where the api server
+        process only exists in the leader node.
+        """
+        client = requests
+        try:
+            while True:
+                try:
+                    resp = client.get(url, timeout=5)
+                    if resp.status_code != 200:
+                        break
+                    time.sleep(5)
+                except Exception:
+                    break
+        finally:
+            if isinstance(client, httpx.Client):
+                client.close()
+
+    def _wait_for_server_pd(self, proxy_port: int, timeout: float):
+        # Wait for all api_server nodes ready
+        assert self.nodes_info is not None, "cluster info must be provided"
+        for node_info in self.nodes_info:
+            if node_info.headless:
+                continue
+
+            url_health = f"http://{node_info.ip}:{node_info.server_port}/health"
+            self._wait_for_server(url=url_health, timeout=timeout)
+
+        # Wait for proxy ready
+        master_node = self.nodes_info[0]
+        url_proxy = f"http://{master_node.ip}:{proxy_port}/healthcheck"
+        self._wait_for_server(url=url_proxy, timeout=timeout)
+
+    def _wait_for_server(self, *, url: str, timeout: float):
+        # run health check
+        start = time.time()
+        client = requests
+        while True:
+            try:
+                if client.get(url).status_code == 200:
+                    break
+            except Exception:
+                # this exception can only be raised by requests.get,
+                # which means the server is not ready yet.
+                # the stack trace is not useful, so we suppress it
+                # by using `raise from None`.
+                result = self._poll()
+                if result is not None and result != 0:
+                    raise RuntimeError("Server exited unexpectedly.") from None
+
+                time.sleep(5)
+                if time.time() - start > timeout:
+                    raise RuntimeError(
+                        "Server failed to start in time."
+                    ) from None
+
+    @property
+    def url_root(self) -> str:
+        return f"http://{self.host}:{self.port}"
+
+    def url_for(self, *parts: str) -> str:
+        return self.url_root + "/" + "/".join(parts)
+
+    def get_client(self, **kwargs):
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = 600
+        return openai.OpenAI(
+            base_url=self.url_for("v1"),
+            api_key=self.DUMMY_API_KEY,
+            max_retries=0,
+            **kwargs,
+        )
+
+    def get_async_client(self, **kwargs):
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = 600
+        return openai.AsyncOpenAI(
+            base_url=self.url_for("v1"),
+            api_key=self.DUMMY_API_KEY,
+            max_retries=0,
+            **kwargs,
+        )
 
 
 @pytest.fixture(scope="session")
